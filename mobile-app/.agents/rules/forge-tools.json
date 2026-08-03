@@ -1,0 +1,392 @@
+{
+  "name": "Forge",
+  "description": "Full-stack app development agent tools — synthesized from Claude Code, v0, Lovable, and Cursor.",
+  "tools": [
+    {
+      "name": "ReadFile",
+      "description": "Reads file contents from the local filesystem.\n\nUsage:\n- file_path must be an absolute path.\n- By default reads up to 2000 lines from the start of the file.\n- Use offset and limit for large files to read specific sections.\n- Lines longer than 2000 characters are truncated.\n- Can read images (PNG, JPG, etc.), PDFs, and Jupyter notebooks.\n- NEVER read files already provided in context — check first.\n- When reading multiple files, invoke in parallel, not sequentially.\n- For large files (>1K lines), prefer CodebaseSearch or GrepSearch scoped to the file instead of reading the entire thing.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "Absolute path to the file to read."
+          },
+          "offset": {
+            "type": "number",
+            "description": "Optional. Line number to start reading from (1-indexed). Use for large files."
+          },
+          "limit": {
+            "type": "number",
+            "description": "Optional. Number of lines to read from the offset."
+          }
+        },
+        "required": ["file_path"]
+      }
+    },
+    {
+      "name": "WriteFile",
+      "description": "Creates a new file or overwrites an existing file with the provided content.\n\nUsage:\n- file_path must be an absolute path. Parent directories are created automatically.\n- For EXISTING files, you MUST read the file first (via ReadFile) before overwriting.\n- ALWAYS prefer EditFile for modifying existing files. Use WriteFile only for new files or complete rewrites.\n- Never proactively create documentation/README files unless explicitly requested.\n- Never add comments to code unless explicitly asked.\n- When creating multiple new files, invoke in parallel.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "Absolute path to the file to create or overwrite."
+          },
+          "content": {
+            "type": "string",
+            "description": "The full content to write to the file."
+          }
+        },
+        "required": ["file_path", "content"]
+      }
+    },
+    {
+      "name": "EditFile",
+      "description": "Performs exact string replacements in an existing file. This is the PREFERRED tool for modifying code.\n\nUsage:\n- You MUST read the file (via ReadFile) at least once before editing.\n- old_string must exactly match existing file content, including all whitespace and indentation.\n- old_string must be unique in the file. If not unique, include more surrounding context or use replace_all.\n- new_string must be different from old_string.\n- Use replace_all: true for renaming variables, updating imports across a file, etc.\n- For multiple non-contiguous edits in the same file, provide an array of edits. Edits are applied sequentially — each edit operates on the result of the previous one.\n- Plan edits carefully to avoid conflicts between sequential operations.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "Absolute path to the file to modify."
+          },
+          "edits": {
+            "type": "array",
+            "description": "Array of edit operations. Each contains old_string, new_string, and optional replace_all.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "old_string": {
+                  "type": "string",
+                  "description": "Exact text to find and replace. Must match file content exactly including whitespace."
+                },
+                "new_string": {
+                  "type": "string",
+                  "description": "Replacement text. Must differ from old_string."
+                },
+                "replace_all": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "If true, replace all occurrences of old_string. Default false."
+                }
+              },
+              "required": ["old_string", "new_string"]
+            },
+            "minItems": 1
+          }
+        },
+        "required": ["file_path", "edits"]
+      }
+    },
+    {
+      "name": "DeleteFile",
+      "description": "Deletes a file from the filesystem.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "file_path": {
+            "type": "string",
+            "description": "Absolute path to the file to delete."
+          }
+        },
+        "required": ["file_path"]
+      }
+    },
+    {
+      "name": "RenameFile",
+      "description": "Renames or moves a file. Always use this instead of creating a new file and deleting the old one.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "original_path": {
+            "type": "string",
+            "description": "Current absolute path of the file."
+          },
+          "new_path": {
+            "type": "string",
+            "description": "New absolute path for the file."
+          }
+        },
+        "required": ["original_path", "new_path"]
+      }
+    },
+    {
+      "name": "ListDirectory",
+      "description": "Lists files and directories at a given path.\n\nUsage:\n- path must be an absolute path.\n- Returns entries sorted alphabetically.\n- Results capped at 200 entries. Use GlobSearch for filtered results.\n- Prefer GlobSearch or GrepSearch when you know what you're looking for.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute path to the directory to list."
+          },
+          "ignore": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Optional glob patterns to exclude (e.g., 'node_modules', '*.log')."
+          }
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "GlobSearch",
+      "description": "Fast file pattern matching. Returns matching file paths sorted by modification time.\n\nUsage:\n- Supports glob patterns like '**/*.ts', 'src/**/*.tsx', '*.config.*'.\n- Use to find files by name or extension.\n- For open-ended searches requiring multiple rounds, use CodebaseSearch instead.\n- Batch multiple glob searches in parallel when possible.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "Glob pattern to match files against (e.g., '**/*.tsx', 'src/**/index.ts')."
+          },
+          "path": {
+            "type": "string",
+            "description": "Optional. Directory to search in. Defaults to project root."
+          }
+        },
+        "required": ["pattern"]
+      }
+    },
+    {
+      "name": "GrepSearch",
+      "description": "Regex-based content search across files, built on ripgrep.\n\nUsage:\n- ALWAYS use this instead of running grep/rg via RunCommand.\n- Supports full regex syntax (e.g., 'function\\s+\\w+', 'import.*from').\n- Filter by file type or glob pattern.\n- Output modes: 'content' (matching lines), 'files_with_matches' (file paths only, default), 'count' (match counts).\n- Results capped at 200 matches.\n- For open-ended exploration, use CodebaseSearch instead.\n- Batch multiple independent searches in parallel.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "Regex pattern to search for in file contents."
+          },
+          "path": {
+            "type": "string",
+            "description": "Optional. File or directory to search. Defaults to project root."
+          },
+          "glob": {
+            "type": "string",
+            "description": "Optional. Glob pattern to filter files (e.g., '*.ts', '*.{ts,tsx}')."
+          },
+          "file_type": {
+            "type": "string",
+            "description": "Optional. File type filter (e.g., 'js', 'py', 'rust', 'go'). More efficient than glob for standard types."
+          },
+          "output_mode": {
+            "type": "string",
+            "enum": ["content", "files_with_matches", "count"],
+            "description": "Output format. Default: 'files_with_matches'."
+          },
+          "case_insensitive": {
+            "type": "boolean",
+            "description": "If true, performs case-insensitive search."
+          },
+          "context_lines_before": {
+            "type": "number",
+            "description": "Lines of context to show before each match (output_mode: 'content' only)."
+          },
+          "context_lines_after": {
+            "type": "number",
+            "description": "Lines of context to show after each match (output_mode: 'content' only)."
+          },
+          "max_results": {
+            "type": "number",
+            "description": "Optional. Limit number of results returned."
+          }
+        },
+        "required": ["pattern"]
+      }
+    },
+    {
+      "name": "CodebaseSearch",
+      "description": "Semantic search that finds code by meaning, not exact text. Launches a sub-agent for complex, multi-step codebase exploration.\n\nWhen to use:\n- Explore unfamiliar codebases ('How does authentication work?')\n- Find code by intent ('Where do we validate user input?')\n- Architecture exploration ('What is the routing structure?')\n- Refactoring preparation ('Find all usages of the old API pattern')\n\nWhen NOT to use:\n- Exact text/symbol matches → use GrepSearch\n- Reading known files → use ReadFile\n- Finding files by name → use GlobSearch\n\nQuery tips:\n- Write complete questions, not keywords: 'How does X work?' not just 'X'\n- One question per search. Split 'What is X and how does Y work?' into two calls.\n- Provide a target directory to narrow scope, or omit for whole-repo search.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "A complete question about what you want to understand (e.g., 'How is user authentication handled?', 'Where are database migrations defined?')."
+          },
+          "target_directory": {
+            "type": "string",
+            "description": "Optional. Single directory or file path to scope the search. Omit to search entire repo. No globs or wildcards."
+          },
+          "goal": {
+            "type": "string",
+            "description": "Optional. Brief context (1–3 sentences) about why you're searching and what you plan to do with results."
+          }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "RunCommand",
+      "description": "Executes a shell command in a persistent session.\n\nUsage:\n- Always quote file paths containing spaces.\n- For commands requiring user interaction, pass non-interactive flags (e.g., --yes, -y).\n- NEVER use interactive flags like `git rebase -i` or `git add -i`.\n- NEVER use `cat`, `head`, `tail`, `ls` — use ReadFile and ListDirectory instead.\n- NEVER use `grep` or `find` — use GrepSearch and GlobSearch instead.\n- Use ';' or '&&' to chain commands, not newlines.\n- Prefer absolute paths over `cd`.\n- For long-running commands (dev servers, watchers), set is_background to true.\n- Timeout: 120s default, max 600s.\n- Output truncated at 30,000 characters.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "The shell command to execute."
+          },
+          "description": {
+            "type": "string",
+            "description": "Clear, concise description of what this command does (5–10 words)."
+          },
+          "is_background": {
+            "type": "boolean",
+            "default": false,
+            "description": "If true, run in background. Use for dev servers, watchers, long-running processes."
+          },
+          "timeout": {
+            "type": "number",
+            "description": "Optional. Timeout in milliseconds (max 600000). Default 120000."
+          },
+          "working_directory": {
+            "type": "string",
+            "description": "Optional. Working directory for the command. Defaults to project root."
+          }
+        },
+        "required": ["command"]
+      }
+    },
+    {
+      "name": "RunBackgroundCommand",
+      "description": "Retrieves output from a running background command, or kills it.\n\nUsage:\n- Use to monitor dev servers, build processes, or long-running tasks started with RunCommand (is_background: true).\n- Use action 'output' to get new output since last check.\n- Use action 'kill' to terminate the background process.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "command_id": {
+            "type": "string",
+            "description": "The ID of the background command (returned by RunCommand when is_background is true)."
+          },
+          "action": {
+            "type": "string",
+            "enum": ["output", "kill"],
+            "description": "'output' to retrieve new output, 'kill' to terminate the process."
+          }
+        },
+        "required": ["command_id", "action"]
+      }
+    },
+    {
+      "name": "WebSearch",
+      "description": "Searches the web and returns results with summaries and URLs.\n\nWhen to use:\n- Information beyond training data cutoff\n- Current documentation, best practices, or version-specific details\n- External integration setup, authentication flows\n- Error messages or debugging guidance not found in codebase\n- When you don't have information about what the user is asking\n\nSearch tips:\n- Use specific version numbers and product names\n- Use 'site:domain.com' to filter to specific sources\n- Use double quotes for exact phrases\n- Account for the current date — don't search for outdated years",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "The search query."
+          },
+          "allowed_domains": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Optional. Only include results from these domains."
+          },
+          "blocked_domains": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Optional. Exclude results from these domains."
+          }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "FetchWebPage",
+      "description": "Fetches and parses content from a specific URL. Returns clean markdown text with metadata.\n\nWhen to use:\n- You have a specific URL to read (documentation, article, reference).\n- Deep content analysis — need full text, not search snippets.\n- Follow-up after WebSearch to read promising results.\n\nUsage:\n- URL must be fully-formed and valid.\n- HTTP URLs are auto-upgraded to HTTPS.\n- Provide a prompt describing what information to extract.\n- Results may be summarized if content is very large.\n- If a redirect to a different host occurs, make a new request with the redirect URL.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The URL to fetch content from."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "What information you want to extract from the page."
+          }
+        },
+        "required": ["url", "prompt"]
+      }
+    },
+    {
+      "name": "TodoWrite",
+      "description": "Creates and manages a structured task list for tracking progress on multi-step work.\n\nWhen to use:\n- Tasks requiring 3+ distinct steps\n- Complex, non-trivial implementations\n- User provides multiple tasks\n- Breaking down large features into milestones\n\nWhen NOT to use:\n- Single, straightforward tasks\n- Trivial changes (< 3 steps)\n- Purely conversational/informational requests\n\nRules:\n- Mark tasks in_progress BEFORE starting work (one at a time).\n- Mark tasks completed IMMEDIATELY after finishing — never batch.\n- Only mark completed when FULLY done (tests pass, no errors).\n- Create milestone-level items, not micro-steps.\n- ≤10 tasks total.\n- No vague items ('Polish', 'Test', 'Finalize').",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "todos": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "Unique identifier for the task."
+                },
+                "content": {
+                  "type": "string",
+                  "description": "Description of the task. Should be milestone-level, not a micro-step.",
+                  "minLength": 1
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["pending", "in_progress", "completed"],
+                  "description": "Current state of the task."
+                }
+              },
+              "required": ["id", "content", "status"]
+            },
+            "description": "The complete, updated todo list."
+          }
+        },
+        "required": ["todos"]
+      }
+    },
+    {
+      "name": "GenerateDesignInspiration",
+      "description": "Generates a detailed design brief with color palettes, typography, layout patterns, and visual direction.\n\nWhen to use:\n- Vague design requests ('a nice landing page', 'modern dashboard')\n- Creative enhancement needed for basic requirements\n- No clear aesthetic or color scheme provided\n- Complex UI/UX projects with multiple sections\n\nWhen NOT to use:\n- Backend/API work with no visual components\n- Minor styling tweaks\n- User already has detailed mockups or wireframes\n- Copying a specific existing design\n\nIMPORTANT: If you generate a design brief, you MUST follow it in implementation.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "goal": {
+            "type": "string",
+            "description": "High-level product, feature, or UX goal (e.g., 'Landing page for AI writing assistant')."
+          },
+          "context": {
+            "type": "string",
+            "description": "Optional. Design cues, brand adjectives, constraints, existing colors, target audience."
+          }
+        },
+        "required": ["goal"]
+      }
+    },
+    {
+      "name": "GenerateImage",
+      "description": "Generates an image from a text prompt and saves it to the specified path.\n\nUsage:\n- Use for hero images, banners, icons, and any visual assets needed in the app.\n- ALWAYS prefer generating real images over leaving placeholders.\n- Mention aspect ratio in the prompt for best results.\n- Use 'Ultra high resolution' suffix for maximum quality.\n- Dimensions must be between 512 and 1920 pixels.\n\nAfter generation, import the image as an ES module in code:\n  import heroImage from '@/assets/hero-image.jpg';",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "Text description of the desired image. Be specific about composition, style, colors, and aspect ratio."
+          },
+          "target_path": {
+            "type": "string",
+            "description": "Absolute path where the generated image should be saved (prefer src/assets/ or public/images/)."
+          },
+          "width": {
+            "type": "number",
+            "description": "Image width in pixels (512–1920, must be multiple of 32)."
+          },
+          "height": {
+            "type": "number",
+            "description": "Image height in pixels (512–1920, must be multiple of 32)."
+          }
+        },
+        "required": ["prompt", "target_path"]
+      }
+    }
+  ]
+}

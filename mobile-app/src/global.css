@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --primary: 160 84% 39%;
+    --primary-glow: 160 84% 50%;
+    --secondary: 210 40% 96%;
+    --background: 0 0% 98%;
+    --foreground: 222 47% 11%;
+    --accent: 38 92% 50%;
+    --warning: 0 84% 60%;
+    --success: 142 71% 45%;
+    --muted: 215 16% 47%;
+  }
+}
