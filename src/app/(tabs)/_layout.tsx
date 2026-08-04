@@ -1,39 +1,81 @@
+import React, { useEffect } from 'react';
 import { Tabs } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import { View, StyleSheet } from 'react-native';
+
+const AnimatedIcon = ({ name, color, size, focused }: { name: any, color: string, size: number, focused: boolean }) => {
+  const scale = useSharedValue(1);
+
+  useEffect(() => {
+    scale.value = withSpring(focused ? 1.2 : 1, { damping: 10, stiffness: 100 });
+  }, [focused]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scale.value }],
+    };
+  });
+
+  return (
+    <Animated.View style={animatedStyle}>
+      <MaterialCommunityIcons name={name} color={color} size={size} />
+    </Animated.View>
+  );
+};
 
 export default function TabLayout() {
   return (
-    <Tabs screenOptions={{
-      tabBarActiveTintColor: 'hsl(160, 84%, 39%)',
-      headerShown: true,
-      headerTitleAlign: 'center',
-    }}>
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: 'rgba(15, 23, 42, 0.95)',
+          borderTopWidth: 0,
+          elevation: 0,
+          height: 70,
+          paddingBottom: 10,
+          paddingTop: 8,
+          position: 'absolute',
+        },
+        tabBarActiveTintColor: '#059669', // emerald
+        tabBarInactiveTintColor: '#64748b',
+        tabBarShowLabel: false,
+      }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Dashboard',
-          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="fridge-outline" size={24} color={color} />,
+          title: 'Fridge',
+          tabBarIcon: ({ color, size, focused }) => (
+            <AnimatedIcon name="fridge-outline" color={color} size={size} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="list"
         options={{
-          title: 'Grocery List',
-          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="format-list-bulleted" size={24} color={color} />,
+          title: 'Shopping',
+          tabBarIcon: ({ color, size, focused }) => (
+            <AnimatedIcon name="cart-outline" color={color} size={size} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="recipes"
         options={{
-          title: 'AI Recipes',
-          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="chef-hat" size={24} color={color} />,
+          title: 'Recipes',
+          tabBarIcon: ({ color, size, focused }) => (
+            <AnimatedIcon name="chef-hat" color={color} size={size} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ color }) => <MaterialCommunityIcons name="cog-outline" size={24} color={color} />,
+          tabBarIcon: ({ color, size, focused }) => (
+            <AnimatedIcon name="cog-outline" color={color} size={size} focused={focused} />
+          ),
         }}
       />
     </Tabs>

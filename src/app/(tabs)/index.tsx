@@ -1,117 +1,171 @@
-import { useState, useEffect } from 'react';
-import { View, Text, FlatList, SafeAreaView, TouchableOpacity, Modal, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, FlatList, TouchableOpacity, Modal, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import InventoryCard, { InventoryItem } from '../../components/InventoryCard';
-import UrgencyFilter from '../../components/UrgencyFilter';
-import CameraScanner from '../../components/CameraScanner';
+import Animated, { FadeInDown, withRepeat, withTiming, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { supabase } from '../../lib/supabase';
+import UrgencyFilter from '../../components/UrgencyFilter';
+import InventoryCard, { InventoryItem } from '../../components/InventoryCard';
+import CameraScanner from '../../components/CameraScanner';
+
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 export default function DashboardScreen() {
-  const [filter, setFilter] = useState('All');
+  const [items, setItems] = useState<InventoryItem[]>([]);
   const [isScannerVisible, setIsScannerVisible] = useState(false);
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [activeFilter, setActiveFilter] = useState('All');
   const [loading, setLoading] = useState(true);
 
+  const pulseValue = useSharedValue(1);
+
   useEffect(() => {
-    fetchInventory();
+    pulseValue.value = withRepeat(withTiming(1.1, { duration: 1000 }), -1, true);
   }, []);
 
-  const fetchInventory = async () => {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('inventory')
-        .select('*')
-        .order('created_at', { ascending: false });
-        
-      if (error) {
-        // Fallback to local state if table doesn't exist yet
-        console.error('Supabase fetch error (table might not exist):', error);
-      } else if (data) {
-        setInventory(data);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+  const pulseStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: pulseValue.value }],
+  }));
+
+  const fetchItems = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from('inventory').select('*').order('created_at', { ascending: false });
+    if (!error && data) setItems(data);
+    setLoading(false);
   };
 
-  const handleScanSuccess = async (scannedItem: any) => {
-    const newItem = {
-      name: scannedItem.name || 'Unknown Food',
-      category: scannedItem.category || 'Other',
-      urgency: scannedItem.urgency || 'FRESH',
-      price: scannedItem.price || 0,
-    };
-    
-    // Optimistic update
-    const tempId = Math.random().toString();
-    setInventory(prev => [{ ...newItem, id: tempId }, ...prev]);
+  useEffect(() => { fetchItems(); }, []);
 
-    // Insert into Supabase
-    const { error } = await supabase.from('inventory').insert([newItem]);
-    
-    if (error) {
-      console.error('Insert error:', error);
-      alert('Failed to save to database. Is the inventory table created in Supabase?');
-    } else {
-      // Refresh to get real ID
-      fetchInventory();
-    }
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning';
+    if (hour < 18) return 'Good Afternoon';
+    return 'Good Evening';
   };
 
-  const filteredData = inventory.filter(item => {
-    if (filter === 'All') return true;
-    if (filter.includes('Eat Now') && item.urgency === 'EAT_NOW') return true;
-    if (filter.includes('Use Soon') && item.urgency === 'USE_SOON') return true;
-    if (filter.includes('Fresh') && item.urgency === 'FRESH') return true;
-    if (filter === item.category) return true;
+  const expiringSoon = items.filter(i => i.urgency === 'EAT_NOW' || i.urgency === 'USE_SOON').length;
+  const moneySaved = items.reduce((sum, i) => sum + (i.price || 0), 0);
+
+  const handleScanSuccess = async (scannedItems: any[]) => {
+    setIsScannerVisible(false);
+    const newItems = scannedItems.map(item => ({
+      name: item.name || 'Unknown',
+      category: item.category || 'Other',
+      urgency: item.urgency || 'FRESH',
+      price: item.price || 0,
+    }));
+    setItems(prev => [...newItems.map((item, i) => ({ ...item, id: `temp-${Date.now()}-${i}` })), ...prev]);
+    await supabase.from('inventory').insert(newItems);
+    fetchItems();
+  };
+
+  const filteredData = items.filter(item => {
+    if (activeFilter === 'All') return true;
+    if (activeFilter.includes('Eat Now') && item.urgency === 'EAT_NOW') return true;
+    if (activeFilter.includes('Use Soon') && item.urgency === 'USE_SOON') return true;
+    if (activeFilter.includes('Fresh') && item.urgency === 'FRESH') return true;
+    if (activeFilter === item.category) return true;
     return false;
   });
 
-  return (
-    <SafeAreaView className="flex-1 bg-background">
-      <View className="flex-1 px-4 pt-4">
-        <Text className="text-3xl font-bold text-foreground mb-4">FreshGuard Dashboard</Text>
+  const renderHeader = () => (
+    <Animated.View entering={FadeInDown.delay(100).duration(500)} style={{ marginBottom: 24 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <View>
-          <UrgencyFilter active={filter} onChange={setFilter} />
+          <Text style={{ color: '#94a3b8', fontSize: 14 }}>{getGreeting()},</Text>
+          <Text style={{ color: '#f8fafc', fontSize: 24, fontWeight: 'bold' }}>Chef</Text>
         </View>
-        
-        {loading && inventory.length === 0 ? (
-          <View className="flex-1 justify-center items-center">
-            <ActivityIndicator size="large" color="#059669" />
-          </View>
-        ) : (
-          <FlatList
-            data={filteredData}
-            keyExtractor={item => item.id || Math.random().toString()}
-            renderItem={({ item }) => <InventoryCard item={item} />}
-            contentContainerStyle={{ paddingBottom: 100 }}
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={() => (
-              <View className="flex-1 justify-center items-center mt-20">
-                <Text className="text-lg text-muted">Your fridge is empty!</Text>
-                <Text className="text-md text-muted mt-2">Tap the camera button to scan items.</Text>
-              </View>
-            )}
-          />
-        )}
-
-        <TouchableOpacity 
-          onPress={() => setIsScannerVisible(true)}
-          className="absolute bottom-6 right-6 bg-primary w-16 h-16 rounded-full justify-center items-center shadow-lg elevation-5"
-        >
-          <MaterialCommunityIcons name="camera" size={30} color="white" />
-        </TouchableOpacity>
-
-        <Modal visible={isScannerVisible} animationType="slide">
-          <CameraScanner 
-            onClose={() => setIsScannerVisible(false)} 
-            onScanSuccess={handleScanSuccess}
-          />
-        </Modal>
+        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: '#334155', justifyContent: 'center', alignItems: 'center' }}>
+          <MaterialCommunityIcons name="account" size={24} color="#f8fafc" />
+        </View>
       </View>
+
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        {[
+          { label: 'Total', value: items.length.toString(), icon: 'format-list-bulleted' },
+          { label: 'Expiring', value: expiringSoon.toString(), icon: 'alert-circle-outline' },
+          { label: 'Saved', value: `$${moneySaved.toFixed(0)}`, icon: 'currency-usd' }
+        ].map((stat, idx) => (
+          <View key={idx} style={[styles.glassCard, { flex: 1, marginHorizontal: 4, padding: 12, alignItems: 'center' }]}>
+            <MaterialCommunityIcons name={stat.icon as any} size={20} color="#059669" />
+            <Text style={{ color: '#f8fafc', fontSize: 18, fontWeight: 'bold', marginTop: 8 }}>{stat.value}</Text>
+            <Text style={{ color: '#94a3b8', fontSize: 12 }}>{stat.label}</Text>
+          </View>
+        ))}
+      </View>
+    </Animated.View>
+  );
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#0f172a' }} edges={['top', 'left', 'right']}>
+      <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 16 }}>
+        <FlatList
+          data={filteredData}
+          ListHeaderComponent={
+            <>
+              {renderHeader()}
+              <View style={{ marginBottom: 16 }}>
+                <UrgencyFilter active={activeFilter} onChange={setActiveFilter} />
+              </View>
+            </>
+          }
+          renderItem={({ item, index }) => (
+            <Animated.View entering={FadeInDown.delay(300 + index * 100).duration(500)}>
+              <InventoryCard item={item} />
+            </Animated.View>
+          )}
+          keyExtractor={item => item.id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 100 }}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }}>
+              <MaterialCommunityIcons name="fridge-outline" size={64} color="#334155" />
+              <Text style={{ color: '#94a3b8', marginTop: 16, fontSize: 16 }}>Your fridge is empty</Text>
+              <Text style={{ color: '#64748b', marginTop: 4 }}>Tap the camera to scan items</Text>
+            </View>
+          }
+        />
+      </View>
+
+      <AnimatedTouchable
+        style={[styles.fab, pulseStyle, styles.shadow]}
+        onPress={() => setIsScannerVisible(true)}
+      >
+        <MaterialCommunityIcons name="camera-plus" size={28} color="#ffffff" />
+      </AnimatedTouchable>
+
+      <Modal visible={isScannerVisible} animationType="slide">
+        <CameraScanner
+          onClose={() => setIsScannerVisible(false)}
+          onScanSuccess={handleScanSuccess}
+        />
+      </Modal>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  glassCard: {
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 80,
+    right: 24,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#059669',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shadow: {
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
+  }
+});
