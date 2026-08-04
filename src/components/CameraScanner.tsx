@@ -23,9 +23,16 @@ export default function CameraScanner({ onClose, onScanSuccess }: Props) {
   const [flash, setFlash] = useState<boolean>(false);
   const [scanState, setScanState] = useState<ScanState>('idle');
   const [scannedProduct, setScannedProduct] = useState<any>(null);
+  const [quantity, setQuantity] = useState<number>(1);
   
   const cameraRef = useRef<any>(null);
   const scanLock = useRef(false);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
 
   const scanLineY = useSharedValue(0);
   const pulseScale = useSharedValue(1);
@@ -86,10 +93,12 @@ export default function CameraScanner({ onClose, onScanSuccess }: Props) {
     try {
       const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.7 });
       const items = await analyzeFridgeImage(photo.base64);
+      if (!isMounted.current) return;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onScanSuccess(items);
       onClose();
     } catch (error) {
+      if (!isMounted.current) return;
       console.error(error);
       Alert.alert('Error', 'Failed to analyze image');
       setScanState('idle');
@@ -102,16 +111,19 @@ export default function CameraScanner({ onClose, onScanSuccess }: Props) {
     scanLock.current = true;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setScanState('processing');
+    setQuantity(1);
 
     try {
       const product = await lookupBarcode(data);
+      if (!isMounted.current) return;
       if (product) {
-        setScannedProduct(product);
+        setScannedProduct({ ...product, barcode: data });
         setScanState('preview');
       } else {
         setScanState('notFound');
       }
     } catch (error) {
+      if (!isMounted.current) return;
       console.error(error);
       setScanState('notFound');
     }
@@ -123,6 +135,7 @@ export default function CameraScanner({ onClose, onScanSuccess }: Props) {
     const expiry = calculateExpiryDate(scannedProduct.category);
     const item = {
       ...scannedProduct,
+      quantity,
       expires_at: expiry,
       image_url: scannedProduct.image_url || getImageForCategory(scannedProduct.category)
     };
@@ -232,13 +245,22 @@ export default function CameraScanner({ onClose, onScanSuccess }: Props) {
                   <Text style={styles.previewBrand}>{scannedProduct.brand}</Text>
                   <Text style={styles.previewCategory}>{scannedProduct.category}</Text>
                 </View>
+                <View style={styles.quantityContainer}>
+                  <TouchableOpacity onPress={() => setQuantity(Math.max(1, quantity - 1))} style={styles.qtyBtn}>
+                    <MaterialCommunityIcons name="minus" size={18} color="#fff" />
+                  </TouchableOpacity>
+                  <Text style={styles.qtyText}>{quantity}</Text>
+                  <TouchableOpacity onPress={() => setQuantity(quantity + 1)} style={styles.qtyBtn}>
+                    <MaterialCommunityIcons name="plus" size={18} color="#fff" />
+                  </TouchableOpacity>
+                </View>
               </View>
               <View style={styles.previewActions}>
                 <TouchableOpacity style={styles.scanNextButton} onPress={handleScanNext}>
                   <Text style={styles.scanNextText}>Scan Next</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.addToFridgeButton} onPress={handleAddToFridge}>
-                  <Text style={styles.addToFridgeText}>Add to Fridge</Text>
+                  <Text style={styles.addToFridgeText}>Add{quantity > 1 ? ` (${quantity})` : ''} to Fridge</Text>
                 </TouchableOpacity>
               </View>
             </Animated.View>
@@ -519,5 +541,23 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#fff',
     fontWeight: 'bold',
+  },
+  quantityContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2c2c2e',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    marginLeft: 8,
+  },
+  qtyBtn: {
+    padding: 4,
+  },
+  qtyText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginHorizontal: 10,
   },
 });

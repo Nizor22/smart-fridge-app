@@ -27,17 +27,20 @@ export default function RecipesScreen() {
     setLoading(true);
     setRecipe(null);
     try {
-      let query = supabase.from('inventory').select('*').eq('status', 'ACTIVE').limit(20);
+      // Token compression: only fetch name/quantity/unit, not full rows
+      let query = supabase.from('inventory').select('name, quantity, unit').eq('status', 'ACTIVE').limit(25);
       if (activeFridgeId) query = query.eq('fridge_id', activeFridgeId);
 
       const { data: inventory } = await query;
       if (inventory && inventory.length > 0) {
-        const generated = await generateRecipe(inventory);
+        // Compress to readable strings to save AI tokens
+        const compressed = inventory.map((i: any) => `${i.quantity || 1} ${i.unit || 'item'} ${i.name}`);
+        const generated = await generateRecipe(compressed);
         setRecipe(generated);
       } else {
         setRecipe({
           title: "Quick Pantry Pasta",
-          description: "A simple pasta dish you can make with common pantry staples. Add items to your fridge first for personalized recipes!",
+          description: "Add items to your fridge first for personalized AI recipes!",
           cookTime: "20 mins",
           servings: 2,
           ingredients: ["200g pasta", "2 tbsp olive oil", "3 cloves garlic", "Salt and pepper", "Parmesan cheese"],
