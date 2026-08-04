@@ -123,18 +123,16 @@ export default function SettingsScreen() {
         return;
       }
 
-      // Create profile in profiles table
+      // Profile is auto-created by auth trigger (handle_new_user)
+      // Update with phone and marketing opt-in
       if (data.user) {
-        await supabase.from('profiles').insert({
-          id: data.user.id,
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
+        await supabase.from('profiles').update({
           phone: phone.trim() || null,
           marketing_opt_in: marketingOptIn,
-        });
+        }).eq('id', data.user.id);
       }
 
-      Alert.alert('Account Created!', 'Welcome to Smart Fridge AI.');
+      Alert.alert('Account Created!', 'Welcome to Smart Fridge AI. Your fridge has been set up automatically.');
       clearForm();
       setAuthModalVisible(false);
     }

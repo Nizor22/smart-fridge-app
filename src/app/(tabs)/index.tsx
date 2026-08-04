@@ -17,7 +17,7 @@ const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 export default function DashboardScreen() {
   const { userId, userName, isAuthenticated } = useAuth();
   const { fridges, activeFridgeId, setActiveFridgeId } = useFridges(userId);
-  const { items, loading, isOffline, addItems, deleteItem, updateExpiry } = useInventory(userId, activeFridgeId);
+  const { items, loading, isOffline, addItems, deleteItem, consumeItem, updateExpiry } = useInventory(userId, activeFridgeId);
   const [isScannerVisible, setIsScannerVisible] = useState(false);
   const [activeFilter, setActiveFilter] = useState('All');
   const [fridgePickerVisible, setFridgePickerVisible] = useState(false);
@@ -36,7 +36,7 @@ export default function DashboardScreen() {
     return 'Good Evening';
   };
 
-  const expiringSoon = items.filter(i => i.urgency === 'EAT_NOW' || i.urgency === 'USE_SOON').length;
+  const expiringSoon = items.filter(i => i.urgency === 'EXPIRED' || i.urgency === 'EXPIRING_SOON').length;
   const moneySaved = items.reduce((sum, i) => sum + (i.price || 0), 0);
   const activeFridge = fridges.find(f => f.id === activeFridgeId);
 
@@ -48,20 +48,25 @@ export default function DashboardScreen() {
       ]);
       return;
     }
+    if (!activeFridgeId) {
+      Alert.alert('No Fridge', 'Create a fridge first in Settings.');
+      return;
+    }
     await addItems(scannedItems);
   };
 
   const handleDeleteItem = (id: string) => {
-    Alert.alert('Remove Item', 'Remove this item from your fridge?', [
+    Alert.alert('Remove Item', 'What happened to this item?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => deleteItem(id) }
+      { text: 'Used It', onPress: () => consumeItem(id) },
+      { text: 'Trashed', style: 'destructive', onPress: () => deleteItem(id) }
     ]);
   };
 
   const filteredData = items.filter(item => {
     if (activeFilter === 'All') return true;
-    if (activeFilter.includes('Eat Now') && item.urgency === 'EAT_NOW') return true;
-    if (activeFilter.includes('Use Soon') && item.urgency === 'USE_SOON') return true;
+    if (activeFilter.includes('Expired') && item.urgency === 'EXPIRED') return true;
+    if (activeFilter.includes('Expiring') && item.urgency === 'EXPIRING_SOON') return true;
     if (activeFilter.includes('Fresh') && item.urgency === 'FRESH') return true;
     if (activeFilter === item.category) return true;
     return false;
@@ -75,7 +80,6 @@ export default function DashboardScreen() {
           ListHeaderComponent={
             <>
               <Animated.View entering={FadeInDown.delay(100).duration(500)} style={{ marginBottom: 24 }}>
-                {/* Header Row */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                   <View>
                     <Text style={{ color: '#94a3b8', fontSize: 14 }}>{getGreeting()},</Text>
@@ -86,7 +90,6 @@ export default function DashboardScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {/* Fridge Selector */}
                 {isAuthenticated && fridges.length > 0 && (
                   <TouchableOpacity style={styles.fridgeSelector} onPress={() => setFridgePickerVisible(true)}>
                     <MaterialCommunityIcons name="fridge-outline" size={18} color="#059669" />
@@ -134,7 +137,7 @@ export default function DashboardScreen() {
             </>
           }
           renderItem={({ item, index }) => (
-            <InventoryCard item={item} index={index} onDelete={handleDeleteItem} onUpdateExpiry={updateExpiry} />
+            <InventoryCard item={item} index={index} onDelete={handleDeleteItem} onUpdateExpiry={updateExpiry} onMarkConsumed={consumeItem} />
           )}
           keyExtractor={item => item.id}
           showsVerticalScrollIndicator={false}
@@ -155,22 +158,17 @@ export default function DashboardScreen() {
         <MaterialCommunityIcons name="camera-plus" size={28} color="#ffffff" />
       </AnimatedTouchable>
 
-      {/* Camera Modal */}
       <Modal visible={isScannerVisible} animationType="slide">
         <CameraScanner onClose={() => setIsScannerVisible(false)} onScanSuccess={handleScanSuccess} />
       </Modal>
 
-      {/* Fridge Picker Modal */}
       <Modal visible={fridgePickerVisible} transparent animationType="fade">
         <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setFridgePickerVisible(false)}>
           <View style={styles.pickerCard}>
             <Text style={{ color: '#f8fafc', fontSize: 18, fontWeight: 'bold', marginBottom: 16 }}>Select Fridge</Text>
             {fridges.map(fridge => (
-              <TouchableOpacity
-                key={fridge.id}
-                style={[styles.pickerItem, fridge.id === activeFridgeId && styles.pickerItemActive]}
-                onPress={() => { setActiveFridgeId(fridge.id); setFridgePickerVisible(false); }}
-              >
+              <TouchableOpacity key={fridge.id} style={[styles.pickerItem, fridge.id === activeFridgeId && styles.pickerItemActive]}
+                onPress={() => { setActiveFridgeId(fridge.id); setFridgePickerVisible(false); }}>
                 <MaterialCommunityIcons name="fridge-outline" size={20} color={fridge.id === activeFridgeId ? '#059669' : '#94a3b8'} />
                 <View style={{ marginLeft: 12, flex: 1 }}>
                   <Text style={{ color: '#f8fafc', fontWeight: '600' }}>{fridge.name}</Text>

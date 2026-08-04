@@ -3,9 +3,9 @@ import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated'
 
 const filters = [
   { id: 'All', label: 'All Items' },
-  { id: 'Eat Now', label: 'Eat Now' },
-  { id: 'Use Soon', label: 'Use Soon' },
-  { id: 'Fresh', label: 'Fresh' },
+  { id: 'Expired', label: '🔴 Expired' },
+  { id: 'Expiring', label: '🟡 Expiring' },
+  { id: 'Fresh', label: '🟢 Fresh' },
   { id: 'Dairy', label: 'Dairy' },
   { id: 'Produce', label: 'Produce' },
   { id: 'Meat', label: 'Meat' },

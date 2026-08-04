@@ -4,6 +4,7 @@ import { cacheInventory, getCachedInventory } from '../lib/cache';
 import { getUrgencyFromItem } from '../lib/expiration';
 import { scheduleExpirationAlerts } from '../lib/notifications';
 import { InventoryItem } from '../components/InventoryCard';
+import { calculateExpiryDate } from '../lib/expiration';
 
 export function useInventory(userId: string | null, fridgeId?: string | null) {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -18,20 +19,16 @@ export function useInventory(userId: string | null, fridgeId?: string | null) {
   };
 
   const fetchItems = useCallback(async () => {
-    if (!userId) { setItems([]); setLoading(false); return; }
+    if (!userId || !fridgeId) { setItems([]); setLoading(false); return; }
     setLoading(true);
     try {
-      let query = supabase.from('inventory').select('*').order('created_at', { ascending: false });
+      const { data, error } = await supabase
+        .from('inventory')
+        .select('*')
+        .eq('fridge_id', fridgeId)
+        .eq('status', 'ACTIVE')
+        .order('created_at', { ascending: false });
 
-      if (fridgeId) {
-        // Shared fridge: get items for this fridge
-        query = query.eq('fridge_id', fridgeId);
-      } else {
-        // Personal: get items with no fridge_id for this user
-        query = query.eq('user_id', userId).is('fridge_id', null);
-      }
-
-      const { data, error } = await query;
       if (error) throw error;
       const enriched = enrichWithExpiration(data || []);
       setItems(enriched);
@@ -50,16 +47,19 @@ export function useInventory(userId: string | null, fridgeId?: string | null) {
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
   const addItems = async (newItems: any[]) => {
-    if (!userId) return;
+    if (!userId || !fridgeId) return;
     const toInsert = newItems.map(item => ({
       name: item.name || 'Unknown',
       category: item.category || 'Other',
       urgency: item.urgency || 'FRESH',
+      status: 'ACTIVE',
+      quantity: item.quantity || 1,
+      unit: item.unit || 'item',
       price: item.price || 0,
       image_url: item.image_url || null,
-      user_id: userId,
-      fridge_id: fridgeId || null,
-      expires_at: item.expires_at || null,
+      added_by: userId,
+      fridge_id: fridgeId,
+      expires_at: item.expires_at || calculateExpiryDate(item.category || 'Other'),
       barcode: item.barcode || null,
     }));
     const tempItems = toInsert.map((item, i) => ({ ...item, id: `temp-${Date.now()}-${i}` }));
@@ -68,9 +68,16 @@ export function useInventory(userId: string | null, fridgeId?: string | null) {
     fetchItems();
   };
 
+  // Soft delete → mark as TRASHED (preserves AI training data)
   const deleteItem = async (id: string) => {
     setItems(prev => prev.filter(i => i.id !== id));
-    await supabase.from('inventory').delete().eq('id', id);
+    await supabase.from('inventory').update({ status: 'TRASHED' }).eq('id', id);
+  };
+
+  // Mark as consumed (preserves AI training data)
+  const consumeItem = async (id: string) => {
+    setItems(prev => prev.filter(i => i.id !== id));
+    await supabase.from('inventory').update({ status: 'CONSUMED' }).eq('id', id);
   };
 
   const updateExpiry = async (id: string, expiresAt: string) => {
@@ -83,5 +90,5 @@ export function useInventory(userId: string | null, fridgeId?: string | null) {
     await supabase.from('inventory').update({ expires_at: expiresAt }).eq('id', id);
   };
 
-  return { items, loading, isOffline, fetchItems, addItems, deleteItem, updateExpiry };
+  return { items, loading, isOffline, fetchItems, addItems, deleteItem, consumeItem, updateExpiry };
 }

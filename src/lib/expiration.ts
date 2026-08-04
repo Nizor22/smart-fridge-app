@@ -1,16 +1,10 @@
 // Dynamic expiration engine
-// Auto-calculates expiry dates and urgency based on food category
 
 const SHELF_LIFE_DAYS: Record<string, number> = {
-  Dairy: 7,
-  Meat: 3,
-  Produce: 5,
-  Pantry: 90,
-  Beverage: 30,
-  Other: 14,
+  Dairy: 7, Meat: 3, Produce: 5, Pantry: 90, Beverage: 30, Other: 14,
 };
 
-export type UrgencyLevel = 'EAT_NOW' | 'USE_SOON' | 'FRESH';
+export type UrgencyLevel = 'EXPIRED' | 'EXPIRING_SOON' | 'FRESH';
 
 export function getShelfLifeDays(category: string): number {
   return SHELF_LIFE_DAYS[category] || SHELF_LIFE_DAYS.Other;
@@ -18,23 +12,21 @@ export function getShelfLifeDays(category: string): number {
 
 export function calculateExpiryDate(category: string, addedAt?: string): string {
   const base = addedAt ? new Date(addedAt) : new Date();
-  const days = getShelfLifeDays(category);
   const expiry = new Date(base);
-  expiry.setDate(expiry.getDate() + days);
+  expiry.setDate(expiry.getDate() + getShelfLifeDays(category));
   return expiry.toISOString();
 }
 
 export function getDaysRemaining(expiresAt: string): number {
   const now = new Date();
   const expiry = new Date(expiresAt);
-  const diff = expiry.getTime() - now.getTime();
-  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  return Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 export function calculateUrgency(expiresAt: string): UrgencyLevel {
   const days = getDaysRemaining(expiresAt);
-  if (days <= 2) return 'EAT_NOW';
-  if (days <= 5) return 'USE_SOON';
+  if (days <= 2) return 'EXPIRED';
+  if (days <= 5) return 'EXPIRING_SOON';
   return 'FRESH';
 }
 

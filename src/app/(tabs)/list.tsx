@@ -5,16 +5,19 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
 import { useAuth } from '../../hooks/useAuth';
 import { useGroceryList } from '../../hooks/useGroceryList';
+import { useFridges } from '../../hooks/useFridges';
 import SkeletonLoader from '../../components/SkeletonLoader';
 
 export default function GroceryListScreen() {
   const { userId, isAuthenticated } = useAuth();
-  const { items, loading, isOffline, addItem, toggleItem, deleteItem } = useGroceryList(userId);
+  const { activeFridgeId } = useFridges(userId);
+  const { items, loading, isOffline, addItem, toggleItem, deleteItem } = useGroceryList(userId, activeFridgeId);
   const [filter, setFilter] = useState<'to_buy' | 'purchased'>('to_buy');
   const [newItemName, setNewItemName] = useState('');
 
   const handleAdd = () => {
     if (!isAuthenticated) { Alert.alert('Sign In Required', 'Please sign in to save grocery items.'); return; }
+    if (!activeFridgeId) { Alert.alert('No Fridge', 'Create a fridge first in Settings.'); return; }
     addItem(newItemName);
     setNewItemName('');
   };
@@ -53,7 +56,10 @@ export default function GroceryListScreen() {
             <Animated.View entering={FadeInDown.delay(index * 50)} exiting={FadeOut} style={[styles.itemCard, styles.shadow]}>
               <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => toggleItem(item.id, item.is_purchased)}>
                 <MaterialCommunityIcons name={item.is_purchased ? "checkbox-marked-circle" : "checkbox-blank-circle-outline"} size={24} color={item.is_purchased ? "#059669" : "#64748b"} />
-                <Text style={{ marginLeft: 12, color: item.is_purchased ? '#64748b' : '#f8fafc', fontSize: 16, textDecorationLine: item.is_purchased ? 'line-through' : 'none' }}>{item.name}</Text>
+                <View style={{ marginLeft: 12, flex: 1 }}>
+                  <Text style={{ color: item.is_purchased ? '#64748b' : '#f8fafc', fontSize: 16, textDecorationLine: item.is_purchased ? 'line-through' : 'none' }}>{item.name}</Text>
+                  {item.quantity > 1 && <Text style={{ color: '#64748b', fontSize: 12 }}>Qty: {item.quantity}</Text>}
+                </View>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => deleteItem(item.id)}>
                 <MaterialCommunityIcons name="delete-outline" size={24} color="#ef4444" />

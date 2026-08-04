@@ -5,6 +5,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 import { supabase } from '../../lib/supabase';
 import { generateRecipe } from '../../lib/ai';
+import { useAuth } from '../../hooks/useAuth';
+import { useFridges } from '../../hooks/useFridges';
 
 interface Recipe {
   title: string;
@@ -16,6 +18,8 @@ interface Recipe {
 }
 
 export default function RecipesScreen() {
+  const { userId } = useAuth();
+  const { activeFridgeId } = useFridges(userId);
   const [loading, setLoading] = useState(false);
   const [recipe, setRecipe] = useState<Recipe | null>(null);
 
@@ -23,7 +27,10 @@ export default function RecipesScreen() {
     setLoading(true);
     setRecipe(null);
     try {
-      const { data: inventory } = await supabase.from('inventory').select('*').limit(10);
+      let query = supabase.from('inventory').select('*').eq('status', 'ACTIVE').limit(20);
+      if (activeFridgeId) query = query.eq('fridge_id', activeFridgeId);
+
+      const { data: inventory } = await query;
       if (inventory && inventory.length > 0) {
         const generated = await generateRecipe(inventory);
         setRecipe(generated);
@@ -36,7 +43,7 @@ export default function RecipesScreen() {
           ingredients: ["200g pasta", "2 tbsp olive oil", "3 cloves garlic", "Salt and pepper", "Parmesan cheese"],
           instructions: [
             "Boil pasta according to package directions.",
-            "Heat olive oil in a pan, saut\u00e9 minced garlic until golden.",
+            "Heat olive oil in a pan, sauté minced garlic until golden.",
             "Toss drained pasta with garlic oil.",
             "Season with salt, pepper, and top with parmesan."
           ]

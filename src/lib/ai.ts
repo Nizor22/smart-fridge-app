@@ -1,5 +1,7 @@
-const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || 'AQ.Ab8RN6KzjNWyfrlYZufPKgRbzscUpqK_UoJwSGahA2jUpZh6sA';
+const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY!;
 const MODELS = ['gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+
+if (!GEMINI_API_KEY) console.warn('EXPO_PUBLIC_GEMINI_API_KEY is not set in .env');
 
 async function callGemini(body: object, retries = 0): Promise<any> {
   const model = MODELS[Math.min(retries, MODELS.length - 1)];
@@ -42,7 +44,7 @@ export async function analyzeFridgeImage(base64Image: string) {
   const result = await callGemini({
     contents: [{
       parts: [
-        { text: "Analyze this image of food items. Identify ALL visible food items. Return ONLY a JSON array of objects, each with: 'name' (string), 'category' (one of: 'Dairy', 'Produce', 'Meat', 'Pantry', 'Beverage', 'Other'), 'urgency' (one of: 'EAT_NOW' if expires within 2 days, 'USE_SOON' if 3-5 days, 'FRESH' if >5 days), 'price' (number, estimate). DO NOT WRAP IN MARKDOWN." },
+        { text: "Analyze this image of food items. Identify ALL visible food items. Return ONLY a JSON array of objects, each with: 'name' (string), 'category' (one of: 'Dairy', 'Produce', 'Meat', 'Pantry', 'Beverage', 'Other'), 'urgency' (one of: 'EXPIRED' if expires within 2 days, 'EXPIRING_SOON' if 3-5 days, 'FRESH' if >5 days), 'price' (number, estimate), 'quantity' (number, count of this item). DO NOT WRAP IN MARKDOWN." },
         { inlineData: { mimeType: "image/jpeg", data: base64Image } }
       ]
     }],
@@ -56,7 +58,7 @@ export async function analyzeFridgeImage(base64Image: string) {
 }
 
 export async function generateRecipe(inventory: any[]) {
-  const inventoryList = inventory.map(i => i.name).join(', ');
+  const inventoryList = inventory.map(i => `${i.quantity || 1}x ${i.name}`).join(', ');
   const randomSeed = Math.floor(Math.random() * 10000);
   return callGemini({
     contents: [{
