@@ -1,12 +1,13 @@
-import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import { Alert } from 'react-native';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY!;
 if (!GEMINI_API_KEY) console.warn('EXPO_PUBLIC_GEMINI_API_KEY is not set in .env');
 
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+// Current available models (Aug 2026) — 2.x series is fully retired
+const MODEL_CHAIN = ['gemini-3.5-flash', 'gemini-3.5-flash-lite'];
 
-// ── Category images for items without a product photo ──
+// ── Category images ──
 const CATEGORY_IMAGES: Record<string, string> = {
   Produce: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80',
   Dairy: 'https://images.unsplash.com/photo-1628088062854-d1870b4553da?w=400&q=80',
@@ -21,110 +22,136 @@ export function getImageForCategory(category: string): string {
   return CATEGORY_IMAGES[category] || CATEGORY_IMAGES.Other;
 }
 
-// ── 1. VISION SCANNER (Structured Output) ──
-// Uses responseSchema to mathematically guarantee valid categories/urgencies
-// that match the Postgres CHECK constraints — no hallucinated values possible
+// ── Raw fetch with model fallback ──
+async function callGemini(body: object): Promise<any> {
+  let lastError: any;
+
+  for (const model of MODEL_CHAIN) {
+    // Retry each model up to 2 times (handles cold-start transient errors)
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        console.log(`[AI] Trying ${model} (attempt ${attempt + 1})`);
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          const isRetryable = response.status === 429 || response.status === 503;
+          const isModelGone = response.status === 404;
+
+          if (isRetryable && attempt === 0) {
+            // Wait 2s and retry same model
+            console.warn(`[AI] ${model} returned ${response.status}, retrying in 2s...`);
+            await new Promise(r => setTimeout(r, 2000));
+            continue;
+          }
+          if (isRetryable || isModelGone) {
+            // Move to next model
+            console.warn(`[AI] ${model} failed (${response.status}), trying next model...`);
+            lastError = new Error(`${response.status}: ${errText.substring(0, 200)}`);
+            break;
+          }
+          throw new Error(`API ${response.status}: ${errText.substring(0, 300)}`);
+        }
+
+        const data = await response.json();
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) {
+          console.warn(`[AI] ${model} returned empty text, retrying...`);
+          if (attempt === 0) { await new Promise(r => setTimeout(r, 1500)); continue; }
+          break;
+        }
+
+        // Try to parse — truncated responses will fail here
+        try {
+          const parsed = JSON.parse(text);
+          console.log(`[AI] Success with: ${model}`);
+          return parsed;
+        } catch (parseErr) {
+          console.warn(`[AI] ${model} returned truncated JSON (${text.length} chars), retrying...`);
+          lastError = parseErr;
+          if (attempt === 0) { await new Promise(r => setTimeout(r, 1500)); continue; }
+          break;
+        }
+      } catch (error: any) {
+        lastError = error;
+        const msg = error?.message || '';
+        if (msg.includes('429') || msg.includes('503') || msg.includes('quota') || msg.includes('JSON')) {
+          if (attempt === 0) {
+            console.warn(`[AI] ${model} error, retrying in 2s...`);
+            await new Promise(r => setTimeout(r, 2000));
+            continue;
+          }
+          break;
+        }
+        if (msg.includes('404')) break;
+        throw error;
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+// ── 1. VISION SCANNER ──
 export async function analyzeFridgeImage(base64Image: string) {
   try {
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      generationConfig: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: SchemaType.OBJECT,
-          properties: {
-            items: {
-              type: SchemaType.ARRAY,
-              description: 'List of distinct grocery items found in the image',
-              items: {
-                type: SchemaType.OBJECT,
-                properties: {
-                  name: { type: SchemaType.STRING, description: 'Short, clear product name' },
-                  category: {
-                    type: SchemaType.STRING,
-                    enum: ['Produce', 'Dairy', 'Meat', 'Beverage', 'Pantry', 'Leftovers'],
-                  },
-                  urgency: {
-                    type: SchemaType.STRING,
-                    enum: ['FRESH', 'EXPIRING_SOON', 'EXPIRED'],
-                  },
-                  quantity: { type: SchemaType.NUMBER, description: 'Count of this item' },
-                  unit: { type: SchemaType.STRING, description: 'Unit (item, lb, gallon, etc.)' },
-                },
-                required: ['name', 'category', 'urgency', 'quantity', 'unit'],
-              },
-            },
+    const result = await callGemini({
+      contents: [{
+        parts: [
+          {
+            text: 'Identify every food item in this photo. Return a JSON object: {"items":[{"name":"...","category":"Produce|Dairy|Meat|Beverage|Pantry|Leftovers","urgency":"FRESH|EXPIRING_SOON|EXPIRED","quantity":1,"unit":"item"}]}',
           },
-          required: ['items'],
-        },
-      },
+          { inlineData: { mimeType: 'image/jpeg', data: base64Image } },
+        ],
+      }],
+      generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 4096 },
     });
 
-    const prompt = 'You are an AI Smart Fridge assistant. Analyze this image of groceries. Identify all distinct grocery items you can see. Return data adhering strictly to the JSON schema.';
-    const result = await model.generateContent([
-      prompt,
-      { inlineData: { data: base64Image, mimeType: 'image/jpeg' } },
-    ]);
-
-    const responseText = result.response.text();
-    if (!responseText) throw new Error('No response from AI');
-
-    const parsed = JSON.parse(responseText);
-    return (parsed.items || []).map((item: any) => ({
+    const items = result?.items || (Array.isArray(result) ? result : [result]);
+    return items.map((item: any) => ({
       name: item.name || 'Unknown Item',
       category: item.category || 'Pantry',
       urgency: item.urgency || 'FRESH',
       quantity: Number(item.quantity) || 1,
       unit: item.unit || 'item',
       price: 0,
-      image_url: getImageForCategory(item.category),
+      image_url: getImageForCategory(item.category || 'Pantry'),
     }));
-  } catch (error) {
+  } catch (error: any) {
     console.error('Gemini Vision Error:', error);
-    Alert.alert('AI Error', 'Could not analyze the photo. Please try again.');
+    const isQuota = error?.message?.includes('429') || error?.message?.includes('quota');
+    Alert.alert(
+      isQuota ? 'AI Quota Exceeded' : 'AI Error',
+      isQuota
+        ? 'Please wait a moment and try again, or check billing at console.cloud.google.com.'
+        : `Could not analyze the photo. ${error?.message?.substring(0, 100) || 'Please try again.'}`,
+    );
     return [];
   }
 }
 
-// ── 2. RECIPE GENERATOR (Structured Output) ──
-// Accepts compressed string[] like ["2 item Apple", "1 gallon Milk"] to save tokens
+// ── 2. RECIPE GENERATOR ──
 export async function generateRecipe(inventoryItems: string[] | any[]) {
-  try {
-    // Handle both string arrays and full objects (backward compat)
-    const ingredientList = inventoryItems.map((item: any) =>
-      typeof item === 'string' ? item : `${item.quantity || 1} ${item.unit || 'item'} ${item.name}`
-    ).join(', ');
+  const ingredientList = inventoryItems.map((item: any) =>
+    typeof item === 'string' ? item : `${item.quantity || 1} ${item.unit || 'item'} ${item.name}`
+  ).join(', ');
 
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 1.2,
-        responseSchema: {
-          type: SchemaType.OBJECT,
-          properties: {
-            title: { type: SchemaType.STRING },
-            description: { type: SchemaType.STRING },
-            cookTime: { type: SchemaType.STRING },
-            servings: { type: SchemaType.NUMBER },
-            ingredients: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-            instructions: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-          },
-          required: ['title', 'description', 'cookTime', 'servings', 'ingredients', 'instructions'],
-        },
-      },
-    });
+  const randomSeed = Math.floor(Math.random() * 10000);
 
-    const randomSeed = Math.floor(Math.random() * 10000);
-    const prompt = `Random seed: ${randomSeed}. I have these ingredients in my fridge: ${ingredientList}. Create a delicious, creative recipe using mostly these ingredients (assume basic pantry staples like salt, oil, pepper are available). Be unique and varied — do not repeat common recipes.`;
-
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
-    if (!responseText) throw new Error('No response from AI');
-
-    return JSON.parse(responseText);
-  } catch (error) {
-    console.error('Recipe Gen Error:', error);
-    throw new Error('Failed to generate recipe');
-  }
+  return callGemini({
+    contents: [{
+      parts: [{
+        text: `Random seed: ${randomSeed}. I have these ingredients: ${ingredientList}.
+Create a delicious, creative recipe using mostly these ingredients (assume basic pantry staples available).
+Return ONLY a JSON object with: "title" (string), "description" (string, 1 sentence), "cookTime" (string), "servings" (number), "ingredients" (array of strings), "instructions" (array of strings).
+DO NOT wrap in markdown.`
+      }],
+    }],
+    generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 4096 },
+  });
 }

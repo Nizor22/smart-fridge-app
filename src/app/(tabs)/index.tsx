@@ -6,7 +6,7 @@ import Animated, { FadeInDown, withRepeat, withTiming, useAnimatedStyle, useShar
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '../../hooks/useAuth';
 import { useInventory } from '../../hooks/useInventory';
-import { useFridges } from '../../hooks/useFridges';
+import { useFridgeContext } from '../../context/FridgeContext';
 import UrgencyFilter from '../../components/UrgencyFilter';
 import InventoryCard from '../../components/InventoryCard';
 import SkeletonLoader from '../../components/SkeletonLoader';
@@ -16,7 +16,7 @@ const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 export default function DashboardScreen() {
   const { userId, userName, isAuthenticated } = useAuth();
-  const { fridges, activeFridgeId, setActiveFridgeId } = useFridges(userId);
+  const { fridges, activeFridgeId, setActiveFridgeId } = useFridgeContext();
   const { items, loading, isOffline, addItems, deleteItem, consumeItem, updateExpiry, fetchItems } = useInventory(userId, activeFridgeId);
   const [isScannerVisible, setIsScannerVisible] = useState(false);
   const [activeFilter, setActiveFilter] = useState('All');

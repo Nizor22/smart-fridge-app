@@ -5,13 +5,13 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
 import { useAuth } from '../../hooks/useAuth';
 import { useGroceryList } from '../../hooks/useGroceryList';
-import { useFridges } from '../../hooks/useFridges';
+import { useFridgeContext } from '../../context/FridgeContext';
 import { useFocusEffect } from 'expo-router';
 import SkeletonLoader from '../../components/SkeletonLoader';
 
 export default function GroceryListScreen() {
   const { userId, isAuthenticated } = useAuth();
-  const { activeFridgeId } = useFridges(userId);
+  const { fridges, activeFridgeId, setActiveFridgeId } = useFridgeContext();
   const { items, loading, isOffline, addItem, toggleItem, deleteItem, fetchList } = useGroceryList(userId, activeFridgeId);
   const [filter, setFilter] = useState<'to_buy' | 'purchased'>('to_buy');
   const [newItemName, setNewItemName] = useState('');
@@ -38,7 +38,7 @@ export default function GroceryListScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0f172a' }} edges={['top', 'left', 'right']}>
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
       <View style={{ padding: 16 }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <Text style={{ color: '#f8fafc', fontSize: 28, fontWeight: 'bold' }}>Grocery List</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             {isOffline && <MaterialCommunityIcons name="wifi-off" size={16} color="#94a3b8" style={{ marginRight: 8 }} />}
@@ -47,6 +47,28 @@ export default function GroceryListScreen() {
             </View>
           </View>
         </View>
+
+        {/* Fridge Selector */}
+        {fridges.length > 0 && (
+          <TouchableOpacity
+            style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#1e293b', borderRadius: 10, padding: 10, marginBottom: 12, borderWidth: 1, borderColor: '#334155' }}
+            onPress={() => {
+              const buttons = fridges.map(f => ({
+                text: `${f.name}${f.id === activeFridgeId ? ' ✓' : ''}`,
+                onPress: () => setActiveFridgeId(f.id),
+              }));
+              buttons.push({ text: 'Cancel', onPress: () => {} });
+              Alert.alert('Select Fridge', 'Choose which fridge\'s grocery list to view:', buttons);
+            }}
+          >
+            <MaterialCommunityIcons name="fridge-outline" size={18} color="#059669" />
+            <Text style={{ color: '#f8fafc', fontWeight: '600', marginLeft: 8, flex: 1 }}>
+              {fridges.find(f => f.id === activeFridgeId)?.name || 'Select Fridge'}
+            </Text>
+            {fridges.length > 1 && <MaterialCommunityIcons name="chevron-down" size={18} color="#94a3b8" />}
+          </TouchableOpacity>
+        )}
+
         <View style={{ flexDirection: 'row', marginBottom: 20, backgroundColor: '#1e293b', borderRadius: 8, padding: 4 }}>
           {(['to_buy', 'purchased'] as const).map(tab => (
             <TouchableOpacity key={tab} style={{ flex: 1, paddingVertical: 8, alignItems: 'center', backgroundColor: filter === tab ? '#334155' : 'transparent', borderRadius: 6 }} onPress={() => setFilter(tab)}>

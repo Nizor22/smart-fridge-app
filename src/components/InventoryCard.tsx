@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { Swipeable } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 
 export type InventoryItem = {
@@ -31,7 +30,8 @@ const urgencyConfig = {
 
 const categoryIconMap: Record<string, any> = {
   dairy: 'water', produce: 'leaf', meat: 'food-drumstick',
-  pantry: 'package-variant', beverage: 'cup', other: 'food-apple',
+  pantry: 'package-variant', beverage: 'cup', leftovers: 'food-turkey',
+  other: 'food-apple',
 };
 
 export default function InventoryCard({ item, index = 0, onDelete, onUpdateExpiry, onMarkConsumed }: {
@@ -61,46 +61,35 @@ export default function InventoryCard({ item, index = 0, onDelete, onUpdateExpir
     setDaysInput('');
   };
 
-  const renderRightActions = () => {
-    if (!onDelete) return null;
-    return (
-      <TouchableOpacity
-        style={styles.swipeTrash}
-        onPress={() => {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          onDelete(item.id);
-        }}
-      >
-        <MaterialCommunityIcons name="delete-outline" size={24} color="#fff" />
-        <Text style={styles.swipeText}>Trash</Text>
-      </TouchableOpacity>
-    );
-  };
-
-  const renderLeftActions = () => {
-    if (!onMarkConsumed) return null;
-    return (
-      <TouchableOpacity
-        style={styles.swipeConsume}
-        onPress={() => {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          onMarkConsumed(item.id);
-        }}
-      >
-        <MaterialCommunityIcons name="check-circle-outline" size={24} color="#fff" />
-        <Text style={styles.swipeText}>Used</Text>
-      </TouchableOpacity>
-    );
+  // Long-press action menu replaces swipe gestures (compatible with all RN versions)
+  const handleLongPress = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const buttons: any[] = [];
+    if (onMarkConsumed) {
+      buttons.push({ text: '✅ Used It', onPress: () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        onMarkConsumed(item.id);
+      }});
+    }
+    if (onUpdateExpiry) {
+      buttons.push({ text: '📅 Set Expiry', onPress: () => setExpiryModalVisible(true) });
+    }
+    if (onDelete) {
+      buttons.push({ text: '🗑️ Trash', style: 'destructive', onPress: () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        onDelete(item.id);
+      }});
+    }
+    buttons.push({ text: 'Cancel', style: 'cancel' });
+    Alert.alert(item.name, `${item.category} · ${config.label}`, buttons);
   };
 
   return (
     <Animated.View entering={FadeInDown.delay(index * 60).springify()}>
-      <Swipeable
-        renderRightActions={renderRightActions}
-        renderLeftActions={renderLeftActions}
-        overshootRight={false}
-        overshootLeft={false}
-        friction={2}
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onLongPress={handleLongPress}
+        delayLongPress={400}
       >
         <View style={styles.card}>
           {item.image_url ? (
@@ -130,8 +119,18 @@ export default function InventoryCard({ item, index = 0, onDelete, onUpdateExpir
             </View>
             {item.price ? <Text style={styles.price}>${item.price.toFixed(2)}</Text> : null}
           </View>
+
+          {/* Quick action buttons */}
+          {(onMarkConsumed || onDelete) && (
+            <TouchableOpacity
+              style={styles.menuBtn}
+              onPress={handleLongPress}
+            >
+              <MaterialCommunityIcons name="dots-vertical" size={20} color="#94a3b8" />
+            </TouchableOpacity>
+          )}
         </View>
-      </Swipeable>
+      </TouchableOpacity>
 
       <Modal visible={expiryModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -174,9 +173,7 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1 },
   badgeText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
   price: { color: '#cbd5e1', fontSize: 13, marginTop: 6, fontWeight: '500' },
-  swipeConsume: { backgroundColor: '#059669', justifyContent: 'center', alignItems: 'center', width: 80, borderRadius: 16, marginBottom: 12, marginRight: 4 },
-  swipeTrash: { backgroundColor: '#ef4444', justifyContent: 'center', alignItems: 'center', width: 80, borderRadius: 16, marginBottom: 12, marginLeft: 4 },
-  swipeText: { color: '#fff', fontSize: 11, fontWeight: '600', marginTop: 4 },
+  menuBtn: { padding: 4, marginLeft: 4 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   expiryModal: { backgroundColor: '#1e293b', borderRadius: 20, padding: 24, width: '100%', maxWidth: 340, borderWidth: 1, borderColor: '#334155' },
   expiryInput: { backgroundColor: '#0f172a', borderRadius: 12, padding: 14, color: '#f8fafc', borderWidth: 1, borderColor: '#334155', fontSize: 18, textAlign: 'center' },

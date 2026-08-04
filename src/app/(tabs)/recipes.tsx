@@ -6,7 +6,7 @@ import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 import { supabase } from '../../lib/supabase';
 import { generateRecipe } from '../../lib/ai';
 import { useAuth } from '../../hooks/useAuth';
-import { useFridges } from '../../hooks/useFridges';
+import { useFridgeContext } from '../../context/FridgeContext';
 
 interface Recipe {
   title: string;
@@ -19,7 +19,7 @@ interface Recipe {
 
 export default function RecipesScreen() {
   const { userId } = useAuth();
-  const { activeFridgeId } = useFridges(userId);
+  const { activeFridgeId } = useFridgeContext();
   const [loading, setLoading] = useState(false);
   const [recipe, setRecipe] = useState<Recipe | null>(null);
 

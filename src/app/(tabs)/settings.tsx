@@ -5,7 +5,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
-import { useFridges } from '../../hooks/useFridges';
+import { useFridgeContext } from '../../context/FridgeContext';
 
 export default function SettingsScreen() {
   const [session, setSession] = useState<any>(null);
@@ -46,8 +46,8 @@ export default function SettingsScreen() {
   const [supportMessage, setSupportMessage] = useState('');
 
   // Fridge management
-  const { userId } = useAuth();
-  const { fridges, createFridge, joinFridge, leaveFridge, deleteFridge, renameFridge, getMembers, fetchFridges } = useFridges(userId);
+  const { userId, refreshProfile } = useAuth();
+  const { fridges, createFridge, joinFridge, leaveFridge, deleteFridge, renameFridge, getMembers, fetchFridges } = useFridgeContext();
   const [fridgeModalVisible, setFridgeModalVisible] = useState(false);
   const [newFridgeName, setNewFridgeName] = useState('');
   const [joinCode, setJoinCode] = useState('');
@@ -210,6 +210,7 @@ export default function SettingsScreen() {
     });
     await supabase.auth.updateUser({ data: { first_name: editFirstName.trim(), last_name: editLastName.trim() } });
     setLoading(false);
+    refreshProfile(); // Update name across all screens
     Alert.alert('Profile Updated!');
     setProfileModalVisible(false);
   };
@@ -293,9 +294,9 @@ export default function SettingsScreen() {
     ]);
   };
 
-  const userName = session?.user?.user_metadata?.first_name
-    ? `${session.user.user_metadata.first_name} ${session.user.user_metadata.last_name || ''}`
-    : editFirstName ? `${editFirstName} ${editLastName}` : 'User';
+  const userName = editFirstName
+    ? `${editFirstName} ${editLastName}`.trim()
+    : 'User';
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0f172a' }} edges={['top']}>

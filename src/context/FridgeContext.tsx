@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
 
 export interface Fridge {
   id: string;
@@ -10,14 +11,41 @@ export interface Fridge {
   role?: string;
 }
 
-export function useFridges(userId: string | null) {
+interface FridgeContextType {
+  fridges: Fridge[];
+  activeFridgeId: string | null;
+  setActiveFridgeId: (id: string | null) => void;
+  loading: boolean;
+  createFridge: (name: string) => Promise<Fridge | null>;
+  joinFridge: (code: string) => Promise<{ success: boolean; message: string }>;
+  leaveFridge: (id: string) => Promise<void>;
+  deleteFridge: (id: string) => Promise<void>;
+  renameFridge: (id: string, name: string) => Promise<void>;
+  getMembers: (id: string) => Promise<any[]>;
+  fetchFridges: () => Promise<void>;
+}
+
+const FridgeContext = createContext<FridgeContextType>({
+  fridges: [],
+  activeFridgeId: null,
+  setActiveFridgeId: () => {},
+  loading: true,
+  createFridge: async () => null,
+  joinFridge: async () => ({ success: false, message: '' }),
+  leaveFridge: async () => {},
+  deleteFridge: async () => {},
+  renameFridge: async () => {},
+  getMembers: async () => [],
+  fetchFridges: async () => {},
+});
+
+export function FridgeProvider({ children }: { children: React.ReactNode }) {
+  const { userId } = useAuth();
   const [fridges, setFridges] = useState<Fridge[]>([]);
   const [activeFridgeId, setActiveFridgeId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  // Use a ref to avoid stale closure issues
   const activeFridgeRef = useRef<string | null>(null);
 
-  // Keep ref in sync with state
   useEffect(() => { activeFridgeRef.current = activeFridgeId; }, [activeFridgeId]);
 
   const fetchFridges = useCallback(async () => {
@@ -49,7 +77,6 @@ export function useFridges(userId: string | null) {
         }));
         setFridges(enriched);
 
-        // Auto-select first fridge if none is active or current one was removed
         const currentActive = activeFridgeRef.current;
         if (!currentActive || !fridgeIds.includes(currentActive)) {
           setActiveFridgeId(enriched[0]?.id || null);
@@ -81,23 +108,18 @@ export function useFridges(userId: string | null) {
     });
 
     await fetchFridges();
-    // Auto-select the newly created fridge
     setActiveFridgeId(data.id);
     return data;
   };
 
-  const joinFridge = async (inviteCode: string): Promise<{ success: boolean; message: string }> => {
+  const joinFridge = async (inviteCode: string) => {
     if (!userId) return { success: false, message: 'Not signed in' };
-
     const { data, error } = await supabase.rpc('join_fridge_by_code', {
       invite_code_input: inviteCode.trim().toLowerCase(),
     });
-
     if (error) return { success: false, message: error.message };
     if (!data?.success) return { success: false, message: data?.message || 'Failed to join' };
-
     await fetchFridges();
-    // Auto-switch to the joined fridge
     if (data.fridge_id) setActiveFridgeId(data.fridge_id);
     return { success: true, message: data.message };
   };
@@ -145,8 +167,16 @@ export function useFridges(userId: string | null) {
     });
   };
 
-  return {
-    fridges, activeFridgeId, setActiveFridgeId, loading,
-    createFridge, joinFridge, leaveFridge, deleteFridge, renameFridge, getMembers, fetchFridges,
-  };
+  return (
+    <FridgeContext.Provider value={{
+      fridges, activeFridgeId, setActiveFridgeId, loading,
+      createFridge, joinFridge, leaveFridge, deleteFridge, renameFridge, getMembers, fetchFridges,
+    }}>
+      {children}
+    </FridgeContext.Provider>
+  );
+}
+
+export function useFridgeContext() {
+  return useContext(FridgeContext);
 }

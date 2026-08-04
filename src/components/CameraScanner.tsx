@@ -4,10 +4,12 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, FadeIn, withSequence, Easing } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { analyzeFridgeImage } from '../lib/ai';
 import { lookupBarcode } from '../lib/barcode';
 import { calculateExpiryDate } from '../lib/expiration';
 import { getImageForCategory } from '../lib/ai';
+import { useFridgeContext } from '../context/FridgeContext';
 
 type Props = {
   onClose: () => void;
@@ -28,6 +30,7 @@ export default function CameraScanner({ onClose, onScanSuccess }: Props) {
   const cameraRef = useRef<any>(null);
   const scanLock = useRef(false);
   const isMounted = useRef(true);
+  const { fridges, activeFridgeId, setActiveFridgeId } = useFridgeContext();
 
   useEffect(() => {
     isMounted.current = true;
@@ -91,8 +94,14 @@ export default function CameraScanner({ onClose, onScanSuccess }: Props) {
     setScanState('processing');
 
     try {
-      const photo = await cameraRef.current.takePictureAsync({ base64: true, quality: 0.7 });
-      const items = await analyzeFridgeImage(photo.base64);
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.6 });
+      // Resize to 1024px — phone cameras are 12MP+, way too large for AI
+      const resized = await ImageManipulator.manipulateAsync(
+        photo.uri,
+        [{ resize: { width: 1024 } }],
+        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+      );
+      const items = await analyzeFridgeImage(resized.base64!);
       if (!isMounted.current) return;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onScanSuccess(items);
@@ -194,6 +203,27 @@ export default function CameraScanner({ onClose, onScanSuccess }: Props) {
             <MaterialCommunityIcons name={flash ? "flash" : "flash-off"} size={28} color="#fff" />
           </TouchableOpacity>
         </View>
+
+        {/* Fridge Selector Pill */}
+        {fridges.length > 0 && (
+          <TouchableOpacity
+            style={styles.fridgePill}
+            onPress={() => {
+              const buttons = fridges.map(f => ({
+                text: `${f.name}${f.id === activeFridgeId ? ' ✓' : ''}`,
+                onPress: () => setActiveFridgeId(f.id),
+              }));
+              buttons.push({ text: 'Cancel', onPress: () => {} });
+              Alert.alert('Scan to which fridge?', 'Items will be added to the selected fridge:', buttons);
+            }}
+          >
+            <MaterialCommunityIcons name="fridge-outline" size={14} color="#059669" />
+            <Text style={styles.fridgePillText}>
+              {fridges.find(f => f.id === activeFridgeId)?.name || 'Select Fridge'}
+            </Text>
+            <MaterialCommunityIcons name="chevron-down" size={14} color="#94a3b8" />
+          </TouchableOpacity>
+        )}
 
         {/* Center Focus Area */}
         <View style={styles.focusContainer} pointerEvents="none">
@@ -559,5 +589,23 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
     marginHorizontal: 10,
+  },
+  fridgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(5, 150, 105, 0.3)',
+  },
+  fridgePillText: {
+    color: '#f8fafc',
+    fontWeight: '600',
+    fontSize: 13,
+    marginHorizontal: 6,
   },
 });
