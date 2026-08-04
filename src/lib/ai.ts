@@ -1,4 +1,4 @@
-const GEMINI_API_KEY = 'AQ.Ab8RN6JtyceEfKyrBuYpYQHbIiD6XxMNAmplztIEAdivpPAkhA';
+const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || 'AQ.Ab8RN6KzjNWyfrlYZufPKgRbzscUpqK_UoJwSGahA2jUpZh6sA';
 const MODELS = ['gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
 
 async function callGemini(body: object, retries = 0): Promise<any> {

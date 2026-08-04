@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Modal, Switch, Alert, Linking, StyleSheet, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Modal, Switch, Alert, Linking, StyleSheet, Platform, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../hooks/useAuth';
+import { useFridges } from '../../hooks/useFridges';
 
 export default function SettingsScreen() {
   const [session, setSession] = useState<any>(null);
@@ -42,6 +44,15 @@ export default function SettingsScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [darkModeEnabled, setDarkModeEnabled] = useState(true);
   const [supportMessage, setSupportMessage] = useState('');
+
+  // Fridge management
+  const { userId } = useAuth();
+  const { fridges, createFridge, joinFridge, leaveFridge, deleteFridge, renameFridge, getMembers, fetchFridges } = useFridges(userId);
+  const [fridgeModalVisible, setFridgeModalVisible] = useState(false);
+  const [newFridgeName, setNewFridgeName] = useState('');
+  const [joinCode, setJoinCode] = useState('');
+  const [fridgeMembers, setFridgeMembers] = useState<any[]>([]);
+  const [viewingFridgeId, setViewingFridgeId] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -292,6 +303,77 @@ export default function SettingsScreen() {
           ...(session ? [{ icon: 'logout', label: 'Sign Out', action: handleSignOut, destructive: true }] : [])
         ]} />
 
+        {/* Shared Fridges Section */}
+        {session && (
+          <Animated.View entering={FadeInDown.delay(250)}>
+            <View style={{ marginBottom: 24 }}>
+              <Text style={{ color: '#94a3b8', fontSize: 14, fontWeight: 'bold', marginBottom: 8, paddingHorizontal: 16 }}>MY FRIDGES</Text>
+              <View style={styles.sectionCard}>
+                {fridges.map((fridge, idx) => (
+                  <TouchableOpacity
+                    key={fridge.id}
+                    style={[styles.settingItem, idx < fridges.length - 1 && styles.borderBottom]}
+                    onPress={async () => {
+                      const members = await getMembers(fridge.id);
+                      setFridgeMembers(members);
+                      setViewingFridgeId(fridge.id);
+                      setFridgeModalVisible(true);
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                      <MaterialCommunityIcons name="fridge-outline" size={22} color="#059669" />
+                      <View style={{ marginLeft: 16 }}>
+                        <Text style={{ color: '#e2e8f0', fontSize: 16 }}>{fridge.name}</Text>
+                        <Text style={{ color: '#64748b', fontSize: 12 }}>{fridge.role === 'owner' ? 'Owner' : 'Member'} · Code: {fridge.invite_code}</Text>
+                      </View>
+                    </View>
+                    <MaterialCommunityIcons name="chevron-right" size={22} color="#475569" />
+                  </TouchableOpacity>
+                ))}
+                {fridges.length === 0 && (
+                  <View style={{ padding: 16, alignItems: 'center' }}>
+                    <Text style={{ color: '#64748b' }}>No fridges yet</Text>
+                  </View>
+                )}
+              </View>
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 12, paddingHorizontal: 16 }}>
+                <TouchableOpacity
+                  style={[styles.primaryBtn, { flex: 1, padding: 12 }]}
+                  onPress={() => {
+                    Alert.prompt ? Alert.prompt('Create Fridge', 'Enter a name for your new fridge:', async (name: string) => {
+                      if (name?.trim()) { await createFridge(name.trim()); }
+                    }) : Alert.alert('Create Fridge', 'Enter a name:', [
+                      { text: 'Cancel' },
+                      { text: 'My Kitchen', onPress: () => createFridge('My Kitchen') },
+                      { text: 'Family Fridge', onPress: () => createFridge('Family Fridge') },
+                      { text: 'Office Fridge', onPress: () => createFridge('Office Fridge') },
+                    ]);
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '600', textAlign: 'center' }}>+ Create Fridge</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.primaryBtn, { flex: 1, padding: 12, backgroundColor: '#334155' }]}
+                  onPress={() => {
+                    Alert.prompt ? Alert.prompt('Join Fridge', 'Enter the invite code:', async (code: string) => {
+                      if (code?.trim()) {
+                        const result = await joinFridge(code);
+                        Alert.alert(result.success ? 'Success!' : 'Error', result.message);
+                      }
+                    }) : (() => {
+                      // Fallback for Android which doesn't have Alert.prompt
+                      setJoinCode('');
+                      Alert.alert('Join Fridge', 'Use the join modal in fridge details');
+                    })();
+                  }}
+                >
+                  <Text style={{ color: '#94a3b8', fontWeight: '600', textAlign: 'center' }}>Join Fridge</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Animated.View>
+        )}
+
         <SettingsGroup title="PREFERENCES" items={[
           { icon: 'bell-outline', label: 'Notifications', toggle: true, value: notificationsEnabled, onToggle: handleNotificationToggle },
           { icon: 'theme-light-dark', label: 'Dark Mode', toggle: true, value: darkModeEnabled, onToggle: setDarkModeEnabled },
@@ -487,6 +569,84 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </ScrollView>
         </SafeAreaView>
+      </Modal>
+
+      {/* ── FRIDGE DETAIL MODAL ── */}
+      <Modal visible={fridgeModalVisible} animationType="slide" presentationStyle="pageSheet">
+        <View style={styles.modalContainer}>
+          {(() => {
+            const fridge = fridges.find(f => f.id === viewingFridgeId);
+            if (!fridge) return null;
+            return (
+              <>
+                <Text style={styles.modalTitle}>{fridge.name}</Text>
+
+                <View style={{ backgroundColor: '#1e293b', borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#334155' }}>
+                  <Text style={{ color: '#94a3b8', fontSize: 12, marginBottom: 4 }}>INVITE CODE</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={{ color: '#059669', fontSize: 24, fontWeight: 'bold', letterSpacing: 4 }}>{fridge.invite_code}</Text>
+                    <TouchableOpacity onPress={() => {
+                      Share.share({ message: `Join my fridge on Smart Fridge AI! Use invite code: ${fridge.invite_code}` });
+                    }} style={{ backgroundColor: '#059669', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 }}>
+                      <Text style={{ color: '#fff', fontWeight: '600' }}>Share</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <Text style={{ color: '#94a3b8', fontSize: 14, fontWeight: 'bold', marginBottom: 8 }}>MEMBERS</Text>
+                <View style={{ backgroundColor: '#1e293b', borderRadius: 12, padding: 4, marginBottom: 16, borderWidth: 1, borderColor: '#334155' }}>
+                  {fridgeMembers.map((member: any, idx: number) => (
+                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: idx < fridgeMembers.length - 1 ? 1 : 0, borderBottomColor: '#334155' }}>
+                      <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#334155', justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ color: '#059669', fontWeight: 'bold' }}>{(member.name?.charAt(0) || '?').toUpperCase()}</Text>
+                      </View>
+                      <View style={{ marginLeft: 12, flex: 1 }}>
+                        <Text style={{ color: '#f8fafc', fontWeight: '600' }}>{member.name}</Text>
+                        <Text style={{ color: '#64748b', fontSize: 12 }}>{member.role}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+
+                {fridge.role === 'owner' ? (
+                  <>
+                    <TouchableOpacity style={[styles.primaryBtn, { marginBottom: 12 }]} onPress={async () => {
+                      Alert.prompt ? Alert.prompt('Rename', 'New name:', async (name: string) => {
+                        if (name?.trim()) { await renameFridge(fridge.id, name.trim()); setFridgeModalVisible(false); }
+                      }, 'plain-text', fridge.name) : (() => {
+                        renameFridge(fridge.id, fridge.name === 'My Fridge' ? 'Family Fridge' : 'My Fridge');
+                        setFridgeModalVisible(false);
+                      })();
+                    }}>
+                      <Text style={styles.primaryBtnText}>Rename Fridge</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: '#ef4444' }]} onPress={() => {
+                      Alert.alert('Delete Fridge', 'This will delete all items in this fridge. Are you sure?', [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Delete', style: 'destructive', onPress: async () => { await deleteFridge(fridge.id); setFridgeModalVisible(false); } }
+                      ]);
+                    }}>
+                      <Text style={styles.primaryBtnText}>Delete Fridge</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: '#ef4444' }]} onPress={() => {
+                    Alert.alert('Leave Fridge', 'You will lose access to shared items.', [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Leave', style: 'destructive', onPress: async () => { await leaveFridge(fridge.id); setFridgeModalVisible(false); } }
+                    ]);
+                  }}>
+                    <Text style={styles.primaryBtnText}>Leave Fridge</Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity style={{ marginTop: 20, alignItems: 'center' }} onPress={() => setFridgeModalVisible(false)}>
+                  <Text style={{ color: '#94a3b8' }}>Close</Text>
+                </TouchableOpacity>
+              </>
+            );
+          })()}
+        </View>
       </Modal>
     </SafeAreaView>
   );
