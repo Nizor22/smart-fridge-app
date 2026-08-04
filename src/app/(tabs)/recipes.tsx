@@ -3,14 +3,14 @@ import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, StyleSheet
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
+import { supabase } from '../../lib/supabase';
 import { generateRecipe } from '../../lib/ai';
 
 interface Recipe {
   title: string;
-  description: string;
-  prepTime: string;
-  cookTime: string;
-  servings: number;
+  description?: string;
+  cookTime?: string;
+  servings?: number;
   ingredients: string[];
   instructions: string[];
 }
@@ -23,43 +23,34 @@ export default function RecipesScreen() {
     setLoading(true);
     setRecipe(null);
     try {
-      // Mocking AI response for now, assume generateRecipe returns a recipe object
-      // const generatedRecipe = await generateRecipe();
-      
-      setTimeout(() => {
+      const { data: inventory } = await supabase.from('inventory').select('*').limit(10);
+      if (inventory && inventory.length > 0) {
+        const generated = await generateRecipe(inventory);
+        setRecipe(generated);
+      } else {
         setRecipe({
-          title: "Garlic Butter Steak Bites",
-          description: "Juicy, tender steak bites seared with a delicious garlic butter sauce. Ready in minutes!",
-          prepTime: "10 mins",
-          cookTime: "15 mins",
+          title: "Quick Pantry Pasta",
+          description: "A simple pasta dish you can make with common pantry staples. Add items to your fridge first for personalized recipes!",
+          cookTime: "20 mins",
           servings: 2,
-          ingredients: [
-            "1 lb Sirloin steak, cubed",
-            "1 tbsp Olive oil",
-            "3 tbsp Butter",
-            "4 cloves Garlic, minced",
-            "Salt and pepper to taste"
-          ],
+          ingredients: ["200g pasta", "2 tbsp olive oil", "3 cloves garlic", "Salt and pepper", "Parmesan cheese"],
           instructions: [
-            "Season steak cubes with salt and pepper.",
-            "Heat olive oil in a skillet over high heat.",
-            "Add steak bites and sear for 2-3 minutes until browned.",
-            "Reduce heat, add butter and minced garlic.",
-            "Toss steak in garlic butter for 1 minute.",
-            "Serve immediately and enjoy."
+            "Boil pasta according to package directions.",
+            "Heat olive oil in a pan, saut\u00e9 minced garlic until golden.",
+            "Toss drained pasta with garlic oil.",
+            "Season with salt, pepper, and top with parmesan."
           ]
         });
-        setLoading(false);
-      }, 2000);
+      }
     } catch (error) {
       console.error(error);
-      setLoading(false);
     }
+    setLoading(false);
   };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0f172a' }} edges={['top']}>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
         {!recipe && !loading && (
           <Animated.View entering={FadeInDown} style={{ alignItems: 'center', marginTop: 60, marginBottom: 40 }}>
             <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#1e293b', justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}>
@@ -82,21 +73,25 @@ export default function RecipesScreen() {
         {recipe && !loading && (
           <Animated.View entering={FadeInDown} style={styles.recipeCard}>
             <Text style={{ color: '#f8fafc', fontSize: 24, fontWeight: 'bold', marginBottom: 8 }}>{recipe.title}</Text>
-            <Text style={{ color: '#94a3b8', fontSize: 14, marginBottom: 16 }}>{recipe.description}</Text>
+            {recipe.description && <Text style={{ color: '#94a3b8', fontSize: 14, marginBottom: 16 }}>{recipe.description}</Text>}
             
             <View style={{ flexDirection: 'row', marginBottom: 20 }}>
-              <View style={styles.badge}>
-                <MaterialCommunityIcons name="clock-outline" size={16} color="#059669" />
-                <Text style={styles.badgeText}>{recipe.cookTime}</Text>
-              </View>
-              <View style={styles.badge}>
-                <MaterialCommunityIcons name="account-group-outline" size={16} color="#059669" />
-                <Text style={styles.badgeText}>{recipe.servings} Servings</Text>
-              </View>
+              {recipe.cookTime && (
+                <View style={styles.badge}>
+                  <MaterialCommunityIcons name="clock-outline" size={16} color="#059669" />
+                  <Text style={styles.badgeText}>{recipe.cookTime}</Text>
+                </View>
+              )}
+              {recipe.servings && (
+                <View style={styles.badge}>
+                  <MaterialCommunityIcons name="account-group-outline" size={16} color="#059669" />
+                  <Text style={styles.badgeText}>{recipe.servings} Servings</Text>
+                </View>
+              )}
             </View>
 
             <Text style={styles.sectionTitle}>Ingredients</Text>
-            {recipe.ingredients.map((ing, idx) => (
+            {recipe.ingredients?.map((ing, idx) => (
               <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                 <MaterialCommunityIcons name="circle-small" size={24} color="#059669" />
                 <Text style={{ color: '#e2e8f0', fontSize: 16 }}>{ing}</Text>
@@ -104,7 +99,7 @@ export default function RecipesScreen() {
             ))}
 
             <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Instructions</Text>
-            {recipe.instructions.map((inst, idx) => (
+            {recipe.instructions?.map((inst, idx) => (
               <View key={idx} style={{ flexDirection: 'row', marginBottom: 12 }}>
                 <Text style={{ color: '#059669', fontSize: 16, fontWeight: 'bold', marginRight: 12 }}>{idx + 1}.</Text>
                 <Text style={{ color: '#e2e8f0', fontSize: 16, flex: 1, lineHeight: 22 }}>{inst}</Text>
@@ -166,13 +161,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#34d399',
-    marginTop: 'auto',
   },
   shadow: {
-    shadowColor: '#000',
+    shadowColor: '#059669',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 4,
+    shadowRadius: 8,
     elevation: 5,
   }
 });

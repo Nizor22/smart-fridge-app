@@ -1,25 +1,24 @@
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
-import Animated, { useAnimatedStyle, withTiming, interpolateColor } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
 
 const filters = [
-  { id: 'ALL', label: 'All Items' },
-  { id: 'EAT_NOW', label: 'Eat Now' },
-  { id: 'USE_SOON', label: 'Use Soon' },
-  { id: 'FRESH', label: 'Fresh' },
+  { id: 'All', label: 'All Items' },
+  { id: 'Eat Now', label: 'Eat Now' },
+  { id: 'Use Soon', label: 'Use Soon' },
+  { id: 'Fresh', label: 'Fresh' },
+  { id: 'Dairy', label: 'Dairy' },
+  { id: 'Produce', label: 'Produce' },
+  { id: 'Meat', label: 'Meat' },
 ];
 
 const FilterPill = ({ filter, isActive, onPress }: { filter: any, isActive: boolean, onPress: () => void }) => {
-  const animatedStyle = useAnimatedStyle(() => {
-    return {
-      backgroundColor: withTiming(isActive ? '#059669' : 'rgba(30, 41, 59, 0.8)', { duration: 200 }),
-    };
-  });
+  const animatedStyle = useAnimatedStyle(() => ({
+    backgroundColor: withTiming(isActive ? '#059669' : 'rgba(30, 41, 59, 0.8)', { duration: 200 }),
+  }));
 
-  const textStyle = useAnimatedStyle(() => {
-    return {
-      color: withTiming(isActive ? '#ffffff' : '#94a3b8', { duration: 200 }),
-    };
-  });
+  const textStyle = useAnimatedStyle(() => ({
+    color: withTiming(isActive ? '#ffffff' : '#94a3b8', { duration: 200 }),
+  }));
 
   return (
     <Pressable onPress={onPress}>
@@ -30,7 +29,7 @@ const FilterPill = ({ filter, isActive, onPress }: { filter: any, isActive: bool
   );
 };
 
-export default function UrgencyFilter({ activeFilter, onFilterChange }: { activeFilter: string, onFilterChange: (id: string) => void }) {
+export default function UrgencyFilter({ active, onChange }: { active: string, onChange: (id: string) => void }) {
   return (
     <View style={styles.container}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -38,8 +37,8 @@ export default function UrgencyFilter({ activeFilter, onFilterChange }: { active
           <FilterPill 
             key={filter.id}
             filter={filter}
-            isActive={activeFilter === filter.id}
-            onPress={() => onFilterChange(filter.id)}
+            isActive={active === filter.id}
+            onPress={() => onChange(filter.id)}
           />
         ))}
       </ScrollView>
@@ -49,11 +48,10 @@ export default function UrgencyFilter({ activeFilter, onFilterChange }: { active
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 16,
+    marginVertical: 8,
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    gap: 12,
+    gap: 10,
   },
   pill: {
     paddingHorizontal: 16,
