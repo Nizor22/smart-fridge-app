@@ -27,7 +27,7 @@ export function useInventory(userId: string | null, fridgeId?: string | null) {
         .select('*')
         .eq('fridge_id', fridgeId)
         .eq('status', 'ACTIVE')
-        .order('created_at', { ascending: false });
+        .order('expires_at', { ascending: true });
 
       if (error) throw error;
       const enriched = enrichWithExpiration(data || []);
@@ -45,6 +45,24 @@ export function useInventory(userId: string | null, fridgeId?: string | null) {
   }, [userId, fridgeId]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
+
+  // Realtime: auto-refresh when roommate adds/modifies items
+  useEffect(() => {
+    if (!fridgeId) return;
+    const channel = supabase
+      .channel(`inventory:${fridgeId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'inventory',
+        filter: `fridge_id=eq.${fridgeId}`,
+      }, () => {
+        fetchItems();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [fridgeId, fetchItems]);
 
   const addItems = async (newItems: any[]) => {
     if (!userId || !fridgeId) return;
@@ -74,7 +92,7 @@ export function useInventory(userId: string | null, fridgeId?: string | null) {
     await supabase.from('inventory').update({ status: 'TRASHED' }).eq('id', id);
   };
 
-  // Mark as consumed (preserves AI training data)
+  // Mark as consumed (preserves AI training data, triggers updated_at)
   const consumeItem = async (id: string) => {
     setItems(prev => prev.filter(i => i.id !== id));
     await supabase.from('inventory').update({ status: 'CONSUMED' }).eq('id', id);

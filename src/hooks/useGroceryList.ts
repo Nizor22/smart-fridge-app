@@ -39,6 +39,24 @@ export function useGroceryList(userId: string | null, fridgeId?: string | null) 
 
   useEffect(() => { fetchList(); }, [fetchList]);
 
+  // Realtime: auto-refresh when roommate modifies the shared grocery list
+  useEffect(() => {
+    if (!fridgeId) return;
+    const channel = supabase
+      .channel(`grocery:${fridgeId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'grocery_list',
+        filter: `fridge_id=eq.${fridgeId}`,
+      }, () => {
+        fetchList();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [fridgeId, fetchList]);
+
   const addItem = async (name: string, quantity: number = 1) => {
     if (!userId || !fridgeId || !name.trim()) return;
     const newItem = { name: name.trim(), quantity, is_purchased: false, added_by: userId, fridge_id: fridgeId };
