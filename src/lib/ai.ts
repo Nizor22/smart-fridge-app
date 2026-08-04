@@ -8,13 +8,13 @@ const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 // ── Category images for items without a product photo ──
 const CATEGORY_IMAGES: Record<string, string> = {
-  Produce: 'https://images.unsplash.com/photo-1610832958506-aa56368176cf?w=400&q=80',
-  Dairy: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=400&q=80',
+  Produce: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=400&q=80',
+  Dairy: 'https://images.unsplash.com/photo-1628088062854-d1870b4553da?w=400&q=80',
   Meat: 'https://images.unsplash.com/photo-1607623814075-e51df1bd682f?w=400&q=80',
   Beverage: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=400&q=80',
-  Pantry: 'https://images.unsplash.com/photo-1584313203487-75e9f8db1127?w=400&q=80',
-  Leftovers: 'https://images.unsplash.com/photo-1621317676644-8848db2c3f87?w=400&q=80',
-  Other: 'https://images.unsplash.com/photo-1506354666786-959d6d497f1a?w=100&h=100&fit=crop&auto=format',
+  Pantry: 'https://images.unsplash.com/photo-1590779033100-9f60a05a013d?w=400&q=80',
+  Leftovers: 'https://images.unsplash.com/photo-1599553550269-e090f777cce1?w=400&q=80',
+  Other: 'https://images.unsplash.com/photo-1590779033100-9f60a05a013d?w=400&q=80',
 };
 
 export function getImageForCategory(category: string): string {
@@ -27,7 +27,7 @@ export function getImageForCategory(category: string): string {
 export async function analyzeFridgeImage(base64Image: string) {
   try {
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-1.5-flash',
       generationConfig: {
         responseMimeType: 'application/json',
         responseSchema: {
@@ -96,7 +96,7 @@ export async function generateRecipe(inventoryItems: string[] | any[]) {
     ).join(', ');
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-1.5-flash',
       generationConfig: {
         responseMimeType: 'application/json',
         temperature: 1.2,

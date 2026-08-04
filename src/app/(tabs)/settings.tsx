@@ -404,8 +404,6 @@ export default function SettingsScreen() {
 
         <SettingsGroup title="PREFERENCES" items={[
           { icon: 'bell-outline', label: 'Notifications', toggle: true, value: notificationsEnabled, onToggle: handleNotificationToggle },
-          { icon: 'theme-light-dark', label: 'Dark Mode', toggle: true, value: darkModeEnabled, onToggle: setDarkModeEnabled },
-          { icon: 'format-size', label: 'Text Size', action: () => Alert.alert('Text Size', 'Coming in the next update!') },
         ]} />
 
         <SettingsGroup title="SUPPORT" items={[
