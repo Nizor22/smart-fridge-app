@@ -1,19 +1,29 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, Alert, StyleSheet } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, TextInput, TouchableOpacity, FlatList, Alert, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
 import { useAuth } from '../../hooks/useAuth';
 import { useGroceryList } from '../../hooks/useGroceryList';
 import { useFridges } from '../../hooks/useFridges';
+import { useFocusEffect } from 'expo-router';
 import SkeletonLoader from '../../components/SkeletonLoader';
 
 export default function GroceryListScreen() {
   const { userId, isAuthenticated } = useAuth();
   const { activeFridgeId } = useFridges(userId);
-  const { items, loading, isOffline, addItem, toggleItem, deleteItem } = useGroceryList(userId, activeFridgeId);
+  const { items, loading, isOffline, addItem, toggleItem, deleteItem, fetchList } = useGroceryList(userId, activeFridgeId);
   const [filter, setFilter] = useState<'to_buy' | 'purchased'>('to_buy');
   const [newItemName, setNewItemName] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+
+  useFocusEffect(useCallback(() => { fetchList(); }, [fetchList]));
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchList();
+    setRefreshing(false);
+  }, [fetchList]);
 
   const handleAdd = () => {
     if (!isAuthenticated) { Alert.alert('Sign In Required', 'Please sign in to save grocery items.'); return; }
@@ -26,6 +36,7 @@ export default function GroceryListScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0f172a' }} edges={['top', 'left', 'right']}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
       <View style={{ padding: 16 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <Text style={{ color: '#f8fafc', fontSize: 28, fontWeight: 'bold' }}>Grocery List</Text>
@@ -52,6 +63,8 @@ export default function GroceryListScreen() {
           data={filteredItems}
           keyExtractor={item => item.id}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 160 }}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
           renderItem={({ item, index }) => (
             <Animated.View entering={FadeInDown.delay(index * 50)} exiting={FadeOut} style={[styles.itemCard, styles.shadow]}>
               <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }} onPress={() => toggleItem(item.id, item.is_purchased)}>
@@ -81,6 +94,7 @@ export default function GroceryListScreen() {
           <MaterialCommunityIcons name="plus" size={24} color="#ffffff" />
         </TouchableOpacity>
       </View>
+    </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

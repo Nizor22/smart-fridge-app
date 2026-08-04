@@ -230,6 +230,33 @@ export default function SettingsScreen() {
     ]);
   };
 
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account, all your fridges, inventory, and grocery lists. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Forever',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              // Delete profile (cascades to fridges → fridge_members, inventory, grocery_list)
+              await supabase.from('profiles').delete().eq('id', session.user.id);
+              await supabase.auth.signOut();
+              Alert.alert('Account Deleted', 'Your account and all data have been permanently removed.');
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'Failed to delete account');
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   // ── NOTIFICATIONS ──
   const handleNotificationToggle = async (value: boolean) => {
     if (value) {
@@ -298,7 +325,10 @@ export default function SettingsScreen() {
           { icon: 'account-edit-outline', label: 'Edit Profile', action: () => session ? setProfileModalVisible(true) : alert('Please sign in first') },
           { icon: 'lock-outline', label: 'Change Password', action: () => session ? setPasswordModalVisible(true) : alert('Please sign in first') },
           { icon: 'lock-reset', label: 'Reset Password', action: () => setResetModalVisible(true) },
-          ...(session ? [{ icon: 'logout', label: 'Sign Out', action: handleSignOut, destructive: true }] : [])
+          ...(session ? [
+            { icon: 'logout', label: 'Sign Out', action: handleSignOut, destructive: true },
+            { icon: 'delete-outline', label: 'Delete Account', action: handleDeleteAccount, destructive: true },
+          ] : [])
         ]} />
 
         {/* Shared Fridges Section */}
@@ -387,8 +417,8 @@ export default function SettingsScreen() {
 
         <SettingsGroup title="ABOUT" items={[
           { icon: 'information-outline', label: 'Version 1.0.0', action: () => alert('Smart Fridge AI v1.0.0\nBuilt with React Native & Expo') },
-          { icon: 'file-document-outline', label: 'Terms of Service', action: () => Linking.openURL('https://smartfridge.ai/terms') },
-          { icon: 'shield-check-outline', label: 'Privacy Policy', action: () => Linking.openURL('https://smartfridge.ai/privacy') },
+          { icon: 'file-document-outline', label: 'Terms of Service', action: () => Linking.openURL('https://mysmartfridge.netlify.app/terms') },
+          { icon: 'shield-check-outline', label: 'Privacy Policy', action: () => Linking.openURL('https://mysmartfridge.netlify.app/privacy') },
         ]} />
 
         <Text style={{ textAlign: 'center', color: '#475569', marginTop: 20 }}>Smart Fridge AI v1.0.0</Text>

@@ -90,11 +90,7 @@ export function useFridges(userId: string | null) {
 
   const leaveFridge = async (fridgeId: string) => {
     if (!userId) return;
-    // Only the fridge owner can manage members, so this uses the owner policy
-    // For non-owners leaving, we need a different approach
-    // Actually, the owner policy covers ALL operations on fridge_members for owner's fridges
-    // For a member leaving their own membership, we need the owner to remove them
-    // OR we use a simple RPC. For now, direct delete works if user owns the fridge
+    // Works via "Members can leave fridge" policy: FOR DELETE USING (user_id = auth.uid())
     await supabase.from('fridge_members').delete().eq('fridge_id', fridgeId).eq('user_id', userId);
     await fetchFridges();
   };

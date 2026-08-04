@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Modal, Alert, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, { FadeInDown, withRepeat, withTiming, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '../../hooks/useAuth';
 import { useInventory } from '../../hooks/useInventory';
 import { useFridges } from '../../hooks/useFridges';
@@ -17,9 +17,19 @@ const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 export default function DashboardScreen() {
   const { userId, userName, isAuthenticated } = useAuth();
   const { fridges, activeFridgeId, setActiveFridgeId } = useFridges(userId);
-  const { items, loading, isOffline, addItems, deleteItem, consumeItem, updateExpiry } = useInventory(userId, activeFridgeId);
+  const { items, loading, isOffline, addItems, deleteItem, consumeItem, updateExpiry, fetchItems } = useInventory(userId, activeFridgeId);
   const [isScannerVisible, setIsScannerVisible] = useState(false);
   const [activeFilter, setActiveFilter] = useState('All');
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Re-fetch when tab gains focus
+  useFocusEffect(useCallback(() => { fetchItems(); }, [fetchItems]));
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchItems();
+    setRefreshing(false);
+  }, [fetchItems]);
   const [fridgePickerVisible, setFridgePickerVisible] = useState(false);
   const router = useRouter();
 
@@ -142,6 +152,8 @@ export default function DashboardScreen() {
           keyExtractor={item => item.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 100 }}
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
           ListEmptyComponent={
             loading ? <SkeletonLoader count={4} style="card" /> : (
               <View style={{ alignItems: 'center', paddingVertical: 40 }}>
