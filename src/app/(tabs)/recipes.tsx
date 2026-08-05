@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -22,6 +22,11 @@ export default function RecipesScreen() {
   const { activeFridgeId } = useFridgeContext();
   const [loading, setLoading] = useState(false);
   const [recipe, setRecipe] = useState<Recipe | null>(null);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    return () => { isMounted.current = false; };
+  }, []);
 
   const handleGenerate = async () => {
     setLoading(true);
@@ -36,7 +41,7 @@ export default function RecipesScreen() {
         // Compress to readable strings to save AI tokens
         const compressed = inventory.map((i: any) => `${i.quantity || 1} ${i.unit || 'item'} ${i.name}`);
         const generated = await generateRecipe(compressed);
-        setRecipe(generated);
+        if (isMounted.current) setRecipe(generated);
       } else {
         setRecipe({
           title: "Quick Pantry Pasta",
@@ -53,9 +58,10 @@ export default function RecipesScreen() {
         });
       }
     } catch (error) {
-      console.error(error);
-    }
-    setLoading(false);
+      console.error('Recipe generation failed:', error);
+    } finally {
+      if (isMounted.current) setLoading(false);
+    };
   };
 
   return (

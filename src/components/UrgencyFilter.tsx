@@ -1,3 +1,4 @@
+import React, { memo } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
 
@@ -29,7 +30,7 @@ const FilterPill = ({ filter, isActive, onPress }: { filter: any, isActive: bool
   );
 };
 
-export default function UrgencyFilter({ active, onChange }: { active: string, onChange: (id: string) => void }) {
+const UrgencyFilter = memo(function UrgencyFilter({ active, onChange }: { active: string, onChange: (id: string) => void }) {
   return (
     <View style={styles.container}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
@@ -44,7 +45,7 @@ export default function UrgencyFilter({ active, onChange }: { active: string, on
       </ScrollView>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -65,3 +66,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+export default UrgencyFilter;

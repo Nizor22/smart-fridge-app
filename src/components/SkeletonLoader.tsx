@@ -27,6 +27,7 @@ const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({ count = 3, style = 'car
       -1,
       false
     );
+    return () => { translateX.value = -width; };
   }, [translateX]);
 
   const animatedStyle = useAnimatedStyle(() => ({

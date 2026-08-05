@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -34,7 +34,7 @@ const categoryIconMap: Record<string, any> = {
   other: 'food-apple',
 };
 
-export default function InventoryCard({ item, index = 0, onDelete, onUpdateExpiry, onMarkConsumed }: {
+const InventoryCard = memo(function InventoryCard({ item, index = 0, onDelete, onUpdateExpiry, onMarkConsumed }: {
   item: InventoryItem;
   index?: number;
   onDelete?: (id: string) => void;
@@ -159,7 +159,7 @@ export default function InventoryCard({ item, index = 0, onDelete, onUpdateExpir
       </Modal>
     </Animated.View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(30, 41, 59, 0.9)', borderRadius: 16, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)' },
@@ -180,3 +180,5 @@ const styles = StyleSheet.create({
   expiryBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
   quickBtn: { backgroundColor: '#0f172a', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: '#334155' },
 });
+
+export default InventoryCard;

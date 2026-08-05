@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Modal, Alert, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -46,9 +46,9 @@ export default function DashboardScreen() {
     return 'Good Evening';
   };
 
-  const expiringSoon = items.filter(i => i.urgency === 'EXPIRED' || i.urgency === 'EXPIRING_SOON').length;
-  const moneySaved = items.reduce((sum, i) => sum + (i.price || 0), 0);
-  const activeFridge = fridges.find(f => f.id === activeFridgeId);
+  const expiringSoon = useMemo(() => items.filter(i => i.urgency === 'EXPIRED' || i.urgency === 'EXPIRING_SOON').length, [items]);
+  const moneySaved = useMemo(() => items.reduce((sum, i) => sum + (i.price || 0), 0), [items]);
+  const activeFridge = useMemo(() => fridges.find(f => f.id === activeFridgeId), [fridges, activeFridgeId]);
 
   const handleScanSuccess = async (scannedItems: any[]) => {
     setIsScannerVisible(false);
@@ -65,22 +65,22 @@ export default function DashboardScreen() {
     await addItems(scannedItems);
   };
 
-  const handleDeleteItem = (id: string) => {
+  const handleDeleteItem = useCallback((id: string) => {
     Alert.alert('Remove Item', 'What happened to this item?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Used It', onPress: () => consumeItem(id) },
       { text: 'Trashed', style: 'destructive', onPress: () => deleteItem(id) }
     ]);
-  };
+  }, [consumeItem, deleteItem]);
 
-  const filteredData = items.filter(item => {
+  const filteredData = useMemo(() => items.filter(item => {
     if (activeFilter === 'All') return true;
     if (activeFilter.includes('Expired') && item.urgency === 'EXPIRED') return true;
     if (activeFilter.includes('Expiring') && item.urgency === 'EXPIRING_SOON') return true;
     if (activeFilter.includes('Fresh') && item.urgency === 'FRESH') return true;
     if (activeFilter === item.category) return true;
     return false;
-  });
+  }), [items, activeFilter]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0f172a' }} edges={['top', 'left', 'right']}>

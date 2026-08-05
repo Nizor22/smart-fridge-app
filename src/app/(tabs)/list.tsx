@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, FlatList, Alert, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -32,7 +32,8 @@ export default function GroceryListScreen() {
     setNewItemName('');
   };
 
-  const filteredItems = items.filter(i => filter === 'to_buy' ? !i.is_purchased : i.is_purchased);
+  const filteredItems = useMemo(() => items.filter(i => filter === 'to_buy' ? !i.is_purchased : i.is_purchased), [items, filter]);
+  const toBuyCount = useMemo(() => items.filter(i => !i.is_purchased).length, [items]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0f172a' }} edges={['top', 'left', 'right']}>
@@ -43,7 +44,7 @@ export default function GroceryListScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             {isOffline && <MaterialCommunityIcons name="wifi-off" size={16} color="#94a3b8" style={{ marginRight: 8 }} />}
             <View style={{ backgroundColor: '#059669', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 }}>
-              <Text style={{ color: '#ffffff', fontWeight: 'bold' }}>{items.filter(i => !i.is_purchased).length} Items</Text>
+              <Text style={{ color: '#ffffff', fontWeight: 'bold' }}>{toBuyCount} Items</Text>
             </View>
           </View>
         </View>

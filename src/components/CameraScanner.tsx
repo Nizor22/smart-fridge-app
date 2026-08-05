@@ -135,6 +135,8 @@ export default function CameraScanner({ onClose, onScanSuccess }: Props) {
       if (!isMounted.current) return;
       console.error(error);
       setScanState('notFound');
+    } finally {
+      if (scanState !== 'preview') scanLock.current = false;
     }
   };
 

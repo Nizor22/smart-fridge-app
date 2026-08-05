@@ -1,38 +1,39 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const CACHE_KEYS = {
-  INVENTORY: 'cache_inventory',
-  GROCERY_LIST: 'cache_grocery_list',
-};
+const INVENTORY_KEY = 'cached_inventory';
+const GROCERY_KEY = 'cached_grocery_list';
 
-export async function cacheInventory(items: any[]) {
+export async function getCachedData<T>(key: string): Promise<T | null> {
   try {
-    await AsyncStorage.setItem(CACHE_KEYS.INVENTORY, JSON.stringify(items));
-  } catch {}
+    const val = await AsyncStorage.getItem(key);
+    return val ? JSON.parse(val) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function setCachedData(key: string, data: any): Promise<void> {
+  try { await AsyncStorage.setItem(key, JSON.stringify(data)); } catch {}
+}
+
+export async function clearCacheKey(key: string): Promise<void> {
+  try { await AsyncStorage.removeItem(key); } catch {}
+}
+
+// Inventory-specific cache helpers
+export async function cacheInventory(items: any[]): Promise<void> {
+  return setCachedData(INVENTORY_KEY, items);
 }
 
 export async function getCachedInventory(): Promise<any[] | null> {
-  try {
-    const data = await AsyncStorage.getItem(CACHE_KEYS.INVENTORY);
-    return data ? JSON.parse(data) : null;
-  } catch { return null; }
+  return getCachedData<any[]>(INVENTORY_KEY);
 }
 
-export async function cacheGroceryList(items: any[]) {
-  try {
-    await AsyncStorage.setItem(CACHE_KEYS.GROCERY_LIST, JSON.stringify(items));
-  } catch {}
+// Grocery list cache helpers
+export async function cacheGroceryList(items: any[]): Promise<void> {
+  return setCachedData(GROCERY_KEY, items);
 }
 
 export async function getCachedGroceryList(): Promise<any[] | null> {
-  try {
-    const data = await AsyncStorage.getItem(CACHE_KEYS.GROCERY_LIST);
-    return data ? JSON.parse(data) : null;
-  } catch { return null; }
-}
-
-export async function clearCache() {
-  try {
-    await AsyncStorage.multiRemove([CACHE_KEYS.INVENTORY, CACHE_KEYS.GROCERY_LIST]);
-  } catch {}
+  return getCachedData<any[]>(GROCERY_KEY);
 }
