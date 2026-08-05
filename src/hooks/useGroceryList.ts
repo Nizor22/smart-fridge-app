@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { cacheGroceryList, getCachedGroceryList } from '../lib/cache';
 
@@ -13,10 +13,11 @@ export function useGroceryList(userId: string | null, fridgeId?: string | null) 
   const [items, setItems] = useState<GroceryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
+  const hasLoaded = useRef(false);
 
   const fetchList = useCallback(async () => {
-    if (!userId || !fridgeId) { setItems([]); setLoading(false); return; }
-    setLoading(true);
+    if (!userId || !fridgeId) { setItems([]); return; }
+    if (!hasLoaded.current) setLoading(true);
     try {
       const { data, error } = await supabase
         .from('grocery_list')
@@ -27,6 +28,7 @@ export function useGroceryList(userId: string | null, fridgeId?: string | null) 
       if (error) throw error;
       setItems(data || []);
       setIsOffline(false);
+      hasLoaded.current = true;
       await cacheGroceryList(data || []);
     } catch {
       setIsOffline(true);
@@ -62,7 +64,6 @@ export function useGroceryList(userId: string | null, fridgeId?: string | null) 
     const newItem = { name: name.trim(), quantity, is_purchased: false, added_by: userId, fridge_id: fridgeId };
     setItems(prev => [{ id: `temp-${Date.now()}`, ...newItem }, ...prev]);
     await supabase.from('grocery_list').insert([newItem]);
-    fetchList();
   };
 
   const toggleItem = async (id: string, current: boolean) => {

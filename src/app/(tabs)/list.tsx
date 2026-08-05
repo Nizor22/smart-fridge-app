@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, FlatList, Alert, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -17,7 +17,12 @@ export default function GroceryListScreen() {
   const [newItemName, setNewItemName] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
-  useFocusEffect(useCallback(() => { fetchList(); }, [fetchList]));
+  const isFirstFocus = useRef(true);
+
+  useFocusEffect(useCallback(() => {
+    if (isFirstFocus.current) { isFirstFocus.current = false; return; }
+    fetchList();
+  }, [fetchList]));
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);

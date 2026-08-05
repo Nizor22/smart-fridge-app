@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { cacheInventory, getCachedInventory } from '../lib/cache';
 import { getUrgencyFromItem } from '../lib/expiration';
@@ -10,6 +10,7 @@ export function useInventory(userId: string | null, fridgeId?: string | null) {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
+  const hasLoaded = useRef(false);
 
   const enrichWithExpiration = (rawItems: any[]): InventoryItem[] => {
     return rawItems.map(item => {
@@ -19,8 +20,8 @@ export function useInventory(userId: string | null, fridgeId?: string | null) {
   };
 
   const fetchItems = useCallback(async () => {
-    if (!userId || !fridgeId) { setItems([]); setLoading(false); return; }
-    setLoading(true);
+    if (!userId || !fridgeId) { setItems([]); return; }
+    if (!hasLoaded.current) setLoading(true);
     try {
       const { data, error } = await supabase
         .from('inventory')
@@ -33,8 +34,9 @@ export function useInventory(userId: string | null, fridgeId?: string | null) {
       const enriched = enrichWithExpiration(data || []);
       setItems(enriched);
       setIsOffline(false);
+      hasLoaded.current = true;
       await cacheInventory(enriched);
-      await scheduleExpirationAlerts(enriched);
+      scheduleExpirationAlerts(enriched);  // fire-and-forget, don't block UI
     } catch {
       setIsOffline(true);
       const cached = await getCachedInventory();
@@ -83,7 +85,6 @@ export function useInventory(userId: string | null, fridgeId?: string | null) {
     const tempItems = toInsert.map((item, i) => ({ ...item, id: `temp-${Date.now()}-${i}` }));
     setItems(prev => [...enrichWithExpiration(tempItems), ...prev]);
     await supabase.from('inventory').insert(toInsert);
-    fetchItems();
   };
 
   // Soft delete → mark as TRASHED (preserves AI training data)

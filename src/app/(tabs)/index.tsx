@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Modal, Alert, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -22,8 +22,13 @@ export default function DashboardScreen() {
   const [activeFilter, setActiveFilter] = useState('All');
   const [refreshing, setRefreshing] = useState(false);
 
-  // Re-fetch when tab gains focus
-  useFocusEffect(useCallback(() => { fetchItems(); }, [fetchItems]));
+  const isFirstFocus = useRef(true);
+
+  // Re-fetch when tab gains focus (skip first — useEffect in hook handles initial load)
+  useFocusEffect(useCallback(() => {
+    if (isFirstFocus.current) { isFirstFocus.current = false; return; }
+    fetchItems();
+  }, [fetchItems]));
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
